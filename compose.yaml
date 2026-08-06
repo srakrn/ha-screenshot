@@ -1,0 +1,25 @@
+services:
+  ha-screenshot:
+    build: .
+    restart: unless-stopped
+    init: true
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      # Keep generated images on the named Docker volume, regardless of the
+      # host-friendly OUTPUT_DIRECTORY value in .env.
+      OUTPUT_DIRECTORY: /data
+      # Mount the directory rather than the individual file: atomic editor
+      # saves replace config.json with rename(2).
+      CONFIG_FILE: /config/config.json
+    volumes:
+      - screenshot-data:/data
+      # The editor atomically updates config.json in this directory.
+      - ./config:/config
+    # Chromium benefits from a larger shared-memory area.
+    shm_size: "256mb"
+
+volumes:
+  screenshot-data:

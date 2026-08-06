@@ -1,0 +1,44 @@
+{
+  "tasks": [
+    {
+      "id": "overview",
+      "dashboardPath": "/lovelace/0?kiosk",
+      "width": 800,
+      "height": 480,
+      "refreshIntervalSeconds": 60,
+      "waitAfterLoadMs": 3000,
+      "colorScheme": "light",
+      "timezone": "Asia/Bangkok",
+      "disableAnimations": true,
+      "zoom": 1,
+      "format": "png"
+    },
+    {
+      "id": "details",
+      "dashboardPath": "/lovelace/1?kiosk",
+      "width": 800,
+      "height": 480,
+      "refreshIntervalSeconds": 300,
+      "waitAfterLoadMs": 5000,
+      "colorScheme": "dark",
+      "timezone": "Asia/Bangkok",
+      "disableAnimations": false,
+      "zoom": 0.9,
+      "format": "png"
+    }
+  ],
+  "images": [
+    {
+      "id": "hallway-display",
+      "fallbackTaskId": "overview",
+      "slots": [
+        {
+          "days": ["mon", "tue", "wed", "thu", "fri"],
+          "start": "18:00",
+          "end": "23:00",
+          "taskId": "details"
+        }
+      ]
+    }
+  ]
+}

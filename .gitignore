@@ -1,0 +1,7 @@
+node_modules/
+.env
+data/
+custom.css
+tasks.json
+config/
+npm-debug.log*
