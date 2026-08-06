@@ -31,6 +31,19 @@ The canonical public routes are:
 
 Both routes are cache-disabled. They return HTTP 503 until the selected task has produced its first successful image. Scheduled image requests only select an existing capture file; they never trigger Chromium.
 
+### Portainer stack
+
+[`compose.portainer.yaml`](compose.portainer.yaml) is a Portainer-friendly stack example that uses a published container image and defines configuration through Portainer stack environment variables. Before deploying it:
+
+1. Publish this repository's image to a registry that the Docker host can pull from.
+2. Create an absolute directory on the Docker host, such as `/opt/ha-screenshot/config`.
+3. Copy `config.example.json` into that directory as `config.json` and ensure the container user can update the directory and file.
+4. In Portainer's stack environment variables, set `HA_SCREENSHOT_IMAGE`, `HA_URL`, `HA_ACCESS_TOKEN`, `CONFIG_PASSWORD`, and `CONFIG_DIRECTORY`. The remaining variables have defaults in the stack file.
+
+For example, `HA_SCREENSHOT_IMAGE` might be `ghcr.io/example/ha-screenshot:latest` and `CONFIG_DIRECTORY` might be `/opt/ha-screenshot/config`. Use the Docker host's path, not a path on the computer running your browser. The configuration directory is a bind mount so it remains straightforward to seed, inspect, and back up; captured images use a named volume.
+
+If Portainer cannot pull a private image, add the registry and its credentials under **Registries** first. The stack publishes port `3000` by default; set `PUBLISHED_PORT` to change only the host-side port.
+
 ## Breaking configuration change
 
 This release deliberately removes the task-array configuration and legacy HTTP aliases. `SCREENSHOT_TASKS_FILE`, `/snapshot`, extension-based screenshot routes, `/api/screenshots`, and the old `/api/tasks` configuration API are no longer supported.
@@ -93,7 +106,7 @@ The complete configuration is saved atomically and hot-applied by the web editor
 }
 ```
 
-At least one task is required; `images` may be empty. Changes are fully validated before the file or running configuration is replaced. Schedule-only changes preserve running capture services and their current status.
+If `CONFIG_FILE` does not exist at startup, the service creates a private bootstrap configuration with empty `tasks` and `images` arrays so the admin editor can be used for initial setup. The same empty bootstrap configuration is accepted on later restarts. Editor updates require at least one task; `images` may be empty. Changes are fully validated before the file or running configuration is replaced. Schedule-only changes preserve running capture services and their current status.
 
 ### Scheduled image feeds
 

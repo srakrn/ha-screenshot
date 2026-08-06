@@ -1,0 +1,30 @@
+# Portainer stack example. Deploy this file after publishing the application
+# image and creating CONFIG_DIRECTORY/config.json on the Docker host.
+services:
+  ha-screenshot:
+    image: ${HA_SCREENSHOT_IMAGE:?Set HA_SCREENSHOT_IMAGE to a published image reference}
+    restart: unless-stopped
+    init: true
+    ports:
+      - "${PUBLISHED_PORT:-3000}:3000"
+    environment:
+      HA_URL: ${HA_URL:?Set HA_URL}
+      HA_ACCESS_TOKEN: ${HA_ACCESS_TOKEN:?Set HA_ACCESS_TOKEN}
+      CONFIG_USERNAME: ${CONFIG_USERNAME:-admin}
+      CONFIG_PASSWORD: ${CONFIG_PASSWORD:?Set CONFIG_PASSWORD}
+      IMAGE_SCHEDULE_TIMEZONE: ${IMAGE_SCHEDULE_TIMEZONE:-UTC}
+      IGNORE_HTTPS_ERRORS: ${IGNORE_HTTPS_ERRORS:-false}
+      CONFIG_FILE: /config/config.json
+      OUTPUT_DIRECTORY: /data
+      PORT: 3000
+    volumes:
+      # Mount the containing directory so atomic editor saves can rename files.
+      - ${CONFIG_DIRECTORY:?Set CONFIG_DIRECTORY to an absolute host path}:/config
+      - screenshot-data:/data
+    # Lets Linux hosts use http://host.docker.internal:8123 for Home Assistant.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    shm_size: "256mb"
+
+volumes:
+  screenshot-data:

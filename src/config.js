@@ -60,13 +60,22 @@ function timezoneValue(raw, name, fallback = "UTC") {
 
 function loadDefinition(env) {
   if (!env.CONFIG_FILE) throw new Error("CONFIG_FILE is required");
+  const configFile = path.resolve(env.CONFIG_FILE);
+  const configDirectory = path.dirname(configFile);
   try {
-    fs.accessSync(env.CONFIG_FILE, fs.constants.R_OK | fs.constants.W_OK);
-    fs.accessSync(path.dirname(path.resolve(env.CONFIG_FILE)), fs.constants.W_OK);
+    fs.accessSync(configDirectory, fs.constants.W_OK);
+    if (!fs.existsSync(configFile)) {
+      fs.writeFileSync(configFile, `${JSON.stringify({ tasks: [], images: [] }, null, 2)}\n`, {
+        encoding: "utf8",
+        flag: "wx",
+        mode: 0o600,
+      });
+    }
+    fs.accessSync(configFile, fs.constants.R_OK | fs.constants.W_OK);
   } catch {
     throw new Error("CONFIG_FILE and its parent directory must be readable and writable");
   }
-  return parseJson(fs.readFileSync(env.CONFIG_FILE, "utf8"), "CONFIG_FILE");
+  return parseJson(fs.readFileSync(configFile, "utf8"), "CONFIG_FILE");
 }
 
 function taskFromDefinition(definition, index, shared) {
@@ -272,6 +281,11 @@ export function loadConfig(env = process.env) {
     configFile: path.resolve(env.CONFIG_FILE || ""),
     imageScheduleTimezone: timezoneValue(env.IMAGE_SCHEDULE_TIMEZONE, "IMAGE_SCHEDULE_TIMEZONE"),
   };
-  const normalized = normalizeConfiguration(loadDefinition(env), shared);
+  const definition = loadDefinition(env);
+  const isEmptyBootstrap = Array.isArray(definition?.tasks) && definition.tasks.length === 0
+    && Array.isArray(definition.images) && definition.images.length === 0;
+  const normalized = isEmptyBootstrap
+    ? { tasks: [], images: [] }
+    : normalizeConfiguration(definition, shared);
   return { ...shared, ...normalized };
 }

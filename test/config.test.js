@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test, { after } from "node:test";
-import { loadConfig } from "../src/config.js";
+import { loadConfig, normalizeConfiguration } from "../src/config.js";
 
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), "ha-screenshot-config-"));
 let sequence = 0;
@@ -28,6 +28,28 @@ test("requires a writable configuration file and editor password", () => {
   assert.throws(() => loadConfig(environment(undefined, { CONFIG_PASSWORD: "too-short" })), /12 characters/);
 });
 
+test("creates and loads an empty bootstrap configuration when the file is missing", () => {
+  const configFile = path.join(directory, `missing-${sequence++}.json`);
+  const config = loadConfig({
+    HA_URL: "http://homeassistant.local:8123",
+    HA_ACCESS_TOKEN: "secret",
+    CONFIG_PASSWORD: "editor-secret",
+    CONFIG_FILE: configFile,
+  });
+
+  assert.deepEqual(config.tasks, []);
+  assert.deepEqual(config.images, []);
+  assert.deepEqual(JSON.parse(fs.readFileSync(configFile, "utf8")), { tasks: [], images: [] });
+
+  const reloaded = loadConfig({
+    HA_URL: "http://homeassistant.local:8123",
+    HA_ACCESS_TOKEN: "secret",
+    CONFIG_PASSWORD: "editor-secret",
+    CONFIG_FILE: configFile,
+  });
+  assert.deepEqual(reloaded.tasks, []);
+});
+
 test("loads task defaults and global schedule timezone", () => {
   const config = loadConfig(environment(undefined, { IMAGE_SCHEDULE_TIMEZONE: "Asia/Bangkok" }));
   assert.equal(config.tasks.length, 1);
@@ -49,7 +71,10 @@ test("normalizes scheduled images and overnight ranges", () => {
 
 test("rejects malformed roots, task values, duplicate ids, and invalid timezone", () => {
   assert.throws(() => loadConfig(environment([{ id: "legacy" }])), /must contain an object/);
-  assert.throws(() => loadConfig(environment({ tasks: [], images: [] })), /non-empty array/);
+  assert.throws(() => normalizeConfiguration({ tasks: [], images: [] }, {
+    haUrl: "http://homeassistant.local:8123",
+    outputDirectory: "/data",
+  }), /non-empty array/);
   assert.throws(() => loadConfig(environment({ tasks: [{ id: "bad id" }], images: [] })), /id/);
   assert.throws(() => loadConfig(environment({ tasks: [{ id: "same" }, { id: "same" }], images: [] })), /Duplicate screenshot task id/);
   assert.throws(() => loadConfig(environment(undefined, { IMAGE_SCHEDULE_TIMEZONE: "Mars/Olympus" })), /IANA timezone/);
