@@ -79,6 +79,7 @@ function safeEqual(actual, expected) {
 
 function configAuth(config) {
   return (request, response, next) => {
+    if (!config.configured) return next();
     const encoded = request.get("authorization")?.match(/^Basic\s+(.+)$/i)?.[1];
     let username = "";
     let password = "";
@@ -124,6 +125,36 @@ function galleryTask(service) {
   };
 }
 
+function adminConfiguration(manager, config, now) {
+  const statusById = new Map(manager.services.map((service) => [service.task.id, taskStatus(service, true)]));
+  const definition = manager.configuration();
+  return {
+    setupRequired: !config.configured,
+    settings: {
+      haUrl: definition.settings.haUrl,
+      accessTokenConfigured: Boolean(definition.settings.accessToken),
+      imageScheduleTimezone: definition.settings.imageScheduleTimezone,
+      configUsername: definition.settings.configUsername,
+      configPasswordConfigured: Boolean(definition.settings.configPassword),
+    },
+    tasks: definition.tasks.map((task) => ({
+      ...task, imageUrl: `/screenshots/${task.id}`, status: statusById.get(task.id),
+    })),
+    images: definition.images.map((image) => {
+      const service = manager.resolveImage(image, now());
+      return {
+        ...image,
+        imageUrl: `/images/${image.id}`,
+        activeTaskId: service.task.id,
+        width: service.task.width,
+        height: service.task.height,
+        format: service.task.format,
+        status: taskStatus(service, true),
+      };
+    }),
+  };
+}
+
 export function createApp(manager, config, { now = () => new Date() } = {}) {
   const app = express();
   const requireConfigAuth = configAuth(config);
@@ -160,6 +191,7 @@ export function createApp(manager, config, { now = () => new Date() } = {}) {
 
   app.get("/api/gallery", (request, response) => {
     response.set("Cache-Control", "no-store").json({
+      setupRequired: !config.configured,
       timezone: config.imageScheduleTimezone,
       images: config.images.map((image) => {
         const service = manager.resolveImage(image, now());
@@ -184,28 +216,16 @@ export function createApp(manager, config, { now = () => new Date() } = {}) {
 
   app.use("/api/config", requireConfigAuth, express.json({ limit: "512kb" }));
   app.get("/api/config", (request, response) => {
-    const statusById = new Map(manager.services.map((service) => [service.task.id, taskStatus(service, true)]));
-    const definition = manager.configuration();
-    return response.set("Cache-Control", "no-store").json({
-      timezone: config.imageScheduleTimezone,
-      tasks: definition.tasks.map((task) => ({ ...task, imageUrl: `/screenshots/${task.id}`, status: statusById.get(task.id) })),
-      images: definition.images.map((image) => {
-        const service = manager.resolveImage(image, now());
-        return {
-          ...image,
-          imageUrl: `/images/${image.id}`,
-          activeTaskId: service.task.id,
-          width: service.task.width,
-          height: service.task.height,
-          format: service.task.format,
-          status: taskStatus(service, true),
-        };
-      }),
-    });
+    return response.set("Cache-Control", "no-store").json(adminConfiguration(manager, config, now));
   });
   app.put("/api/config", requireSameOriginMutation, async (request, response) => {
     try {
-      return response.json(await manager.replace({ tasks: request.body?.tasks, images: request.body?.images }));
+      await manager.replace({
+        settings: request.body?.settings,
+        tasks: request.body?.tasks,
+        images: request.body?.images,
+      });
+      return response.json(adminConfiguration(manager, config, now));
     } catch (error) {
       return response.status(400).json({ error: error.message });
     }

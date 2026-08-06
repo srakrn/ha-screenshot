@@ -5,22 +5,20 @@ A Dockerized Chromium service that periodically captures Home Assistant dashboar
 ## Quick start
 
 1. Create a dedicated, non-admin Home Assistant user and a Long-Lived Access Token.
-2. Create local configuration files:
+2. Create the deployment environment file:
 
    ```sh
    cp .env.example .env
-   mkdir -p config
-   cp config.example.json config/config.json
    ```
 
-3. Set `HA_URL`, `HA_ACCESS_TOKEN`, and a strong `CONFIG_PASSWORD` in `.env`.
-4. Start the service:
+3. Start the service:
 
    ```sh
    docker compose up -d --build
    ```
 
-5. Open `/admin/` to edit capture tasks and scheduled image URLs, or `/` for the public gallery.
+4. Open `/admin/`, enter the Home Assistant connection and editor credentials in **Settings**, add a capture task, then save. The first-run editor is open only until this initial configuration is saved.
+5. Open `/` for the public gallery.
 
 The canonical public routes are:
 
@@ -33,35 +31,21 @@ Both routes are cache-disabled. They return HTTP 503 until the selected task has
 
 ### Portainer stack
 
-[`compose.portainer.yaml`](compose.portainer.yaml) is a Portainer-friendly stack example that uses a published container image and defines configuration through Portainer stack environment variables. Before deploying it:
+[`compose.portainer.yaml`](compose.portainer.yaml) is a Portainer-friendly stack example that uses a published container image. Before deploying it:
 
 1. Publish this repository's image to a registry that the Docker host can pull from.
-2. Create an absolute directory on the Docker host, such as `/opt/ha-screenshot/config`.
-3. Copy `config.example.json` into that directory as `config.json` and ensure the container user can update the directory and file.
-4. In Portainer's stack environment variables, set `HA_SCREENSHOT_IMAGE`, `HA_URL`, `HA_ACCESS_TOKEN`, `CONFIG_PASSWORD`, and `CONFIG_DIRECTORY`. The remaining variables have defaults in the stack file.
+2. In Portainer's stack environment variables, set `HA_SCREENSHOT_IMAGE`. `PUBLISHED_PORT` and `IGNORE_HTTPS_ERRORS` are optional.
+3. Deploy the stack, open `/admin/`, and complete the first-run setup.
 
-For example, `HA_SCREENSHOT_IMAGE` might be `ghcr.io/example/ha-screenshot:latest` and `CONFIG_DIRECTORY` might be `/opt/ha-screenshot/config`. Use the Docker host's path, not a path on the computer running your browser. The configuration directory is a bind mount so it remains straightforward to seed, inspect, and back up; captured images use a named volume.
+For example, `HA_SCREENSHOT_IMAGE` might be `ghcr.io/example/ha-screenshot:latest`. Configuration and captured images are stored together in the named data volume.
 
 If Portainer cannot pull a private image, add the registry and its credentials under **Registries** first. The stack publishes port `3000` by default; set `PUBLISHED_PORT` to change only the host-side port.
 
-## Breaking configuration change
+## Configuration storage
 
-This release deliberately removes the task-array configuration and legacy HTTP aliases. `SCREENSHOT_TASKS_FILE`, `/snapshot`, extension-based screenshot routes, `/api/screenshots`, and the old `/api/tasks` configuration API are no longer supported.
+The editor stores the complete configuration atomically at `OUTPUT_DIRECTORY/config.json`. In the supported Docker deployment this is `/data/config.json`, on the same persistent volume as captured images. Keep the entire data volume private: the file contains the Home Assistant token and editor password. The service never returns either secret through its APIs.
 
-Set `CONFIG_FILE` to a writable JSON object containing `tasks` and `images`. Existing installations must convert their old array to the new `tasks` property and update display URLs to the canonical routes above.
-
-### Docker volume mounting
-
-The supported container path is `/config/config.json`. Compose maps the host directory `./config` to `/config` and overrides `CONFIG_FILE` accordingly:
-
-```yaml
-environment:
-  CONFIG_FILE: /config/config.json
-volumes:
-  - ./config:/config
-```
-
-Mount the **directory**, not only `/config/config.json`. The editor saves atomically by writing a temporary sibling and renaming it over the configuration file, which requires write access to the containing directory. A direct `docker run` deployment can use the same layout with `-v ./config:/config` and `-e CONFIG_FILE=/config/config.json`.
+Installations upgrading from the previous `/config/config.json` layout should move that file to `/data/config.json`, add the `settings` object shown below, and remove the old Home Assistant, editor, schedule, and `CONFIG_FILE` environment variables.
 
 ## Configuration
 
@@ -69,6 +53,13 @@ The complete configuration is saved atomically and hot-applied by the web editor
 
 ```json
 {
+  "settings": {
+    "haUrl": "http://homeassistant.local:8123",
+    "accessToken": "replace-with-a-long-lived-access-token",
+    "imageScheduleTimezone": "Asia/Bangkok",
+    "configUsername": "admin",
+    "configPassword": "change-this-editor-password"
+  },
   "tasks": [
     {
       "id": "morning",
@@ -106,7 +97,7 @@ The complete configuration is saved atomically and hot-applied by the web editor
 }
 ```
 
-If `CONFIG_FILE` does not exist at startup, the service creates a private bootstrap configuration with empty `tasks` and `images` arrays so the admin editor can be used for initial setup. The same empty bootstrap configuration is accepted on later restarts. Editor updates require at least one task; `images` may be empty. Changes are fully validated before the file or running configuration is replaced. Schedule-only changes preserve running capture services and their current status.
+If `OUTPUT_DIRECTORY/config.json` does not exist at startup, the service creates a private empty bootstrap configuration. The gallery shows a focused setup prompt and the editor remains unauthenticated until the first valid configuration is saved. That first save requires complete service settings and at least one task; `images` may be empty. Changes are fully validated before the file or running configuration is replaced. Schedule-only changes preserve running capture services and their current status.
 
 ### Scheduled image feeds
 
@@ -120,14 +111,14 @@ Ranges are start-inclusive and end-exclusive. If the end is earlier than the sta
 
 All tasks referenced by one feed must have exactly the same width, height, and format. This guarantees that the feed's dimensions and content type do not change throughout the day.
 
-`IMAGE_SCHEDULE_TIMEZONE` controls weekly schedule selection globally and defaults to `UTC`. This is separate from each task's `timezone`, which controls dates and clocks inside the captured browser page.
+The **Schedule timezone** web setting controls weekly schedule selection globally and defaults to `UTC`. This is separate from each task's `timezone`, which controls dates and clocks inside the captured browser page.
 
 ### Capture task fields
 
 | Field | Default | Purpose |
 | --- | --- | --- |
 | `id` | required | URL-safe name containing letters, numbers, `_`, or `-` |
-| `dashboardPath` | `/lovelace/0` | Path relative to `HA_URL`, or an absolute dashboard URL |
+| `dashboardPath` | `/lovelace/0` | Path relative to the Home Assistant URL, or an absolute dashboard URL |
 | `width` / `height` | `800` / `480` | Exact output dimensions in pixels |
 | `refreshIntervalSeconds` | `300` | Capture period; `0` means startup only |
 | `waitAfterLoadMs` | `3000` | Additional render time after Home Assistant loads |
@@ -148,15 +139,11 @@ All tasks referenced by one feed must have exactly the same width, height, and f
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `HA_URL` | required | Home Assistant base URL reachable from the container |
-| `HA_ACCESS_TOKEN` | required | Long-lived token, retained server-side |
-| `CONFIG_FILE` | required | Combined JSON configuration; `/config/config.json` is the supported container path |
-| `IMAGE_SCHEDULE_TIMEZONE` | `UTC` | IANA timezone for every image-feed schedule |
-| `CONFIG_USERNAME` | `admin` | HTTP Basic username for the editor and configuration API |
-| `CONFIG_PASSWORD` | required | Editor password of at least 12 characters |
 | `OUTPUT_DIRECTORY` | `/data` | Persistent capture directory |
 | `IGNORE_HTTPS_ERRORS` | `false` | Accept invalid/self-signed Home Assistant TLS certificates |
 | `PORT` | `3000` | HTTP listen port |
+
+All other service settings are managed through `/admin/`. The service itself listens over HTTP only; put it behind a trusted reverse proxy if HTTPS access is required.
 
 ## HTTP API and health
 
@@ -165,13 +152,13 @@ All tasks referenced by one feed must have exactly the same width, height, and f
 - `GET /api/config` and `PUT /api/config` require editor authentication. The mutation also requires `X-Requested-With: ha-screenshot`.
 - `POST /api/tasks/:id/capture` requires the same authentication and mutation header.
 
-The public image and health routes remain unauthenticated. Keep port 3000 on a trusted network or add network-level access control. Use HTTPS when accessing the editor outside a trusted LAN because HTTP Basic credentials are encoded, not encrypted.
+The public image and health routes remain unauthenticated. Before initial setup, the editor is also open so credentials can be created. Keep port 3000 on a trusted network during setup and add network-level access control or an HTTPS reverse proxy when exposing it outside a trusted LAN. HTTP Basic credentials are encoded, not encrypted.
 
 The frontend loads pinned Bootstrap 5.3.8 assets from jsDelivr with Subresource Integrity. Browsers need access to that CDN for the styled admin and gallery interfaces; image endpoints do not depend on the CDN.
 
 ## Custom CSS and Home Assistant security
 
-For substantial capture styling, mount a file under `config/` and reference it as `/config/custom.css` in Docker (`./config/custom.css` for a direct host-side Node run). CSS is copied into the document and currently open shadow roots. Home Assistant credentials are injected only into storage for the configured Home Assistant origin and never into embedded cross-origin frames, responses, URLs, or screenshots.
+For substantial capture styling, place a file in the data volume and reference it as `/data/custom.css` in Docker (`./data/custom.css` with the example direct-run environment). CSS is copied into the document and currently open shadow roots. Home Assistant credentials are injected only into storage for the configured Home Assistant origin and never into embedded cross-origin frames, responses, URLs, or screenshots.
 
 If Home Assistant runs on the Docker host, `localhost` inside the container is not the host. Docker Desktop users can use `host.docker.internal`. Linux users can add:
 

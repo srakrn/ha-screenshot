@@ -27,20 +27,42 @@
         <div class="small text-body-secondary">Schedule timezone: <strong id="schedule-timezone"></strong></div>
       </div>
       <div id="notice" class="alert" role="alert" hidden></div>
+      <div id="setup-notice" class="alert alert-primary d-flex flex-wrap align-items-center justify-content-between gap-3" hidden>
+        <div><strong>Welcome — two things to set up.</strong><div class="small">Add your Home Assistant connection below, then create at least one capture task.</div></div>
+        <button id="setup-add-task" class="btn btn-primary btn-sm" type="button">Add first task</button>
+      </div>
 
       <ul class="nav nav-tabs" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tasks-pane" type="button">Capture tasks <span id="task-count" class="badge text-bg-secondary ms-1"></span></button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#images-pane" type="button">Image URLs <span id="image-count" class="badge text-bg-secondary ms-1"></span></button></li>
+        <li class="nav-item"><button id="settings-tab" class="nav-link" data-bs-toggle="tab" data-bs-target="#settings-pane" type="button">Settings</button></li>
       </ul>
       <div class="tab-content bg-white border border-top-0 rounded-bottom shadow-sm">
         <section id="tasks-pane" class="tab-pane fade show active p-3 p-lg-4" role="tabpanel">
           <div class="d-flex justify-content-between align-items-center mb-3"><div><h2 class="h5 mb-1">Capture tasks</h2><p class="small text-body-secondary mb-0">Independent Chromium jobs and their direct public images.</p></div><button id="add-task" class="btn btn-primary btn-sm">Add task</button></div>
-          <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Preview</th><th>Task</th><th>Status</th><th>Output</th><th>Refresh</th><th class="text-end">Actions</th></tr></thead><tbody id="tasks"></tbody></table></div>
+          <div id="tasks-table" class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Preview</th><th>Task</th><th>Status</th><th>Output</th><th>Refresh</th><th class="text-end">Actions</th></tr></thead><tbody id="tasks"></tbody></table></div>
+          <div id="tasks-empty" class="empty-state text-center" hidden><div class="empty-state-icon" aria-hidden="true">▣</div><h3 class="h5">No capture tasks yet</h3><p class="text-body-secondary mb-3">Create a task to render your first Home Assistant dashboard image.</p><button id="empty-add-task" class="btn btn-primary btn-sm" type="button">Add first task</button></div>
         </section>
         <section id="images-pane" class="tab-pane fade p-3 p-lg-4" role="tabpanel">
           <div class="d-flex justify-content-between align-items-center mb-3"><div><h2 class="h5 mb-1">Scheduled image URLs</h2><p class="small text-body-secondary mb-0">Stable URLs select from compatible task images without starting a capture.</p></div><button id="add-image" class="btn btn-primary btn-sm">Add image URL</button></div>
           <div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Preview</th><th>Image URL</th><th>Active now</th><th>Fallback</th><th>Schedule</th><th class="text-end">Actions</th></tr></thead><tbody id="images"></tbody></table></div>
           <div id="images-empty" class="text-center text-body-secondary py-5" hidden>No scheduled image URLs yet.</div>
+        </section>
+        <section id="settings-pane" class="tab-pane fade p-3 p-lg-4" role="tabpanel">
+          <div class="mb-4"><h2 class="h5 mb-1">Service settings</h2><p class="small text-body-secondary mb-0">Connection and editor credentials are stored server-side in the configuration file.</p></div>
+          <form id="settings-form">
+            <h3 class="h6 text-uppercase text-body-secondary">Home Assistant</h3>
+            <div class="row g-3 mb-4">
+              <div class="col-lg-6"><label class="form-label" for="ha-url">Home Assistant URL</label><input id="ha-url" class="form-control" name="haUrl" type="url" placeholder="http://homeassistant.local:8123" required></div>
+              <div class="col-lg-6"><label class="form-label" for="access-token">Long-lived access token</label><input id="access-token" class="form-control" name="accessToken" type="password" autocomplete="new-password" required><div id="access-token-help" class="form-text">The token is stored server-side and is never returned to the browser.</div></div>
+              <div class="col-lg-6"><label class="form-label" for="schedule-timezone-input">Schedule timezone</label><input id="schedule-timezone-input" class="form-control" name="imageScheduleTimezone" placeholder="UTC" required><div class="form-text">IANA timezone used by every scheduled image URL.</div></div>
+            </div>
+            <h3 class="h6 text-uppercase text-body-secondary">Editor access</h3>
+            <div class="row g-3 mb-2">
+              <div class="col-lg-6"><label class="form-label" for="config-username">Username</label><input id="config-username" class="form-control" name="configUsername" autocomplete="username" required></div>
+              <div class="col-lg-6"><label class="form-label" for="config-password">Password</label><input id="config-password" class="form-control" name="configPassword" type="password" minlength="12" autocomplete="new-password" required><div id="config-password-help" class="form-text">Use at least 12 characters. Changing it will require you to sign in again.</div></div>
+            </div>
+          </form>
         </section>
       </div>
     </main>

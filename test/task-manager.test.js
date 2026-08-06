@@ -11,9 +11,10 @@ const silentLogger = { info() {}, error() {} };
 async function fixture(t) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ha-screenshot-manager-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
-  const config = { haUrl: "http://homeassistant.local:8123", outputDirectory: directory, configFile: path.join(directory, "config.json"), imageScheduleTimezone: "UTC" };
-  Object.assign(config, normalizeConfiguration({ tasks: [{ id: "old", refreshIntervalSeconds: 0 }], images: [] }, config));
-  await fs.writeFile(config.configFile, JSON.stringify({ tasks: [{ id: "old" }], images: [] }));
+  const settings = { haUrl: "http://homeassistant.local:8123", accessToken: "secret", configUsername: "admin", configPassword: "editor-secret", imageScheduleTimezone: "UTC" };
+  const config = { outputDirectory: directory, configFile: path.join(directory, "config.json"), configured: true };
+  Object.assign(config, normalizeConfiguration({ settings, tasks: [{ id: "old", refreshIntervalSeconds: 0 }], images: [] }, config));
+  await fs.writeFile(config.configFile, JSON.stringify({ settings, tasks: [{ id: "old" }], images: [] }));
   return config;
 }
 
@@ -39,6 +40,30 @@ test("schedule-only updates preserve capture services and do not restart capture
   assert.equal(manager.services[0], originalService);
   assert.equal(captures, 0);
   assert.equal(manager.getImage("feed").fallbackTaskId, "old");
+});
+
+test("persists web settings while preserving omitted secrets", async (t) => {
+  const config = await fixture(t);
+  const manager = new TaskManager({ async capture() { return { capturedAt: new Date() }; } }, config, silentLogger);
+  await manager.replace({
+    settings: {
+      haUrl: "https://homeassistant.example.test",
+      imageScheduleTimezone: "Asia/Bangkok",
+      configUsername: "operator",
+    },
+    tasks: manager.definitions(),
+    images: [],
+  });
+  await manager.stop();
+  const saved = JSON.parse(await fs.readFile(config.configFile, "utf8"));
+  assert.deepEqual(saved.settings, {
+    haUrl: "https://homeassistant.example.test",
+    accessToken: "secret",
+    imageScheduleTimezone: "Asia/Bangkok",
+    configUsername: "operator",
+    configPassword: "editor-secret",
+  });
+  assert.equal(manager.services[0].task.dashboardUrl, "https://homeassistant.example.test/lovelace/0");
 });
 
 test("failed validation neither persists nor replaces the running configuration", async (t) => {

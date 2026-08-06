@@ -58,14 +58,13 @@ function timezoneValue(raw, name, fallback = "UTC") {
   return value;
 }
 
-function loadDefinition(env) {
-  if (!env.CONFIG_FILE) throw new Error("CONFIG_FILE is required");
-  const configFile = path.resolve(env.CONFIG_FILE);
+function loadDefinition(configFile) {
   const configDirectory = path.dirname(configFile);
   try {
+    fs.mkdirSync(configDirectory, { recursive: true });
     fs.accessSync(configDirectory, fs.constants.W_OK);
     if (!fs.existsSync(configFile)) {
-      fs.writeFileSync(configFile, `${JSON.stringify({ tasks: [], images: [] }, null, 2)}\n`, {
+      fs.writeFileSync(configFile, `${JSON.stringify({ settings: {}, tasks: [], images: [] }, null, 2)}\n`, {
         encoding: "utf8",
         flag: "wx",
         mode: 0o600,
@@ -73,9 +72,29 @@ function loadDefinition(env) {
     }
     fs.accessSync(configFile, fs.constants.R_OK | fs.constants.W_OK);
   } catch {
-    throw new Error("CONFIG_FILE and its parent directory must be readable and writable");
+    throw new Error("OUTPUT_DIRECTORY and its configuration file must be readable and writable");
   }
-  return parseJson(fs.readFileSync(configFile, "utf8"), "CONFIG_FILE");
+  return parseJson(fs.readFileSync(configFile, "utf8"), "configuration file");
+}
+
+function normalizeSettings(definition) {
+  if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
+    throw new Error("settings must be an object");
+  }
+  let haUrl;
+  try { haUrl = new URL(definition.haUrl); } catch { throw new Error("settings.haUrl must be a valid http or https URL"); }
+  if (!["http:", "https:"].includes(haUrl.protocol)) throw new Error("settings.haUrl must use http or https");
+  const configPassword = stringValue(definition.configPassword, "settings.configPassword", "");
+  if (configPassword.length < 12 || configPassword === "replace-with-a-strong-editor-password") {
+    throw new Error("settings.configPassword must be changed to at least 12 characters");
+  }
+  return {
+    haUrl: haUrl.toString().replace(/\/$/, ""),
+    accessToken: stringValue(definition.accessToken, "settings.accessToken", ""),
+    imageScheduleTimezone: timezoneValue(definition.imageScheduleTimezone, "settings.imageScheduleTimezone"),
+    configUsername: stringValue(definition.configUsername, "settings.configUsername", "admin"),
+    configPassword,
+  };
 }
 
 function taskFromDefinition(definition, index, shared) {
@@ -102,6 +121,9 @@ function taskFromDefinition(definition, index, shared) {
   if (typeof outputFilename !== "string" || outputFilename.length === 0
       || [".", ".."].includes(outputFilename) || path.basename(outputFilename) !== outputFilename) {
     throw new Error(`${label}.outputFilename must be a filename, not a path`);
+  }
+  if (outputFilename === "config.json") {
+    throw new Error(`${label}.outputFilename is reserved for the service configuration`);
   }
   return {
     id,
@@ -230,11 +252,12 @@ export function normalizeImages(definitions = [], tasks) {
 
 export function normalizeConfiguration(definition, shared) {
   if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
-    throw new Error("CONFIG_FILE must contain an object with tasks and images arrays");
+    throw new Error("configuration file must contain an object");
   }
-  const tasks = normalizeTasks(definition.tasks, shared);
+  const settings = normalizeSettings(definition.settings);
+  const tasks = normalizeTasks(definition.tasks, { ...shared, ...settings });
   const images = normalizeImages(definition.images ?? [], tasks);
-  return { tasks, images };
+  return { ...settings, tasks, images };
 }
 
 export function taskToDefinition(task) {
@@ -255,37 +278,35 @@ export function imageToDefinition(image) {
 
 export function configurationToDefinition(configuration) {
   return {
+    settings: {
+      haUrl: configuration.haUrl,
+      accessToken: configuration.accessToken,
+      imageScheduleTimezone: configuration.imageScheduleTimezone,
+      configUsername: configuration.configUsername,
+      configPassword: configuration.configPassword,
+    },
     tasks: configuration.tasks.map(taskToDefinition),
     images: configuration.images.map(imageToDefinition),
   };
 }
 
 export function loadConfig(env = process.env) {
-  if (!env.HA_URL) throw new Error("HA_URL is required");
-  if (!env.HA_ACCESS_TOKEN) throw new Error("HA_ACCESS_TOKEN is required");
-  if (!env.CONFIG_PASSWORD) throw new Error("CONFIG_PASSWORD is required for the configuration editor");
-  if (env.CONFIG_PASSWORD.length < 12 || env.CONFIG_PASSWORD === "replace-with-a-strong-editor-password") {
-    throw new Error("CONFIG_PASSWORD must be changed to at least 12 characters");
-  }
-  let haUrl;
-  try { haUrl = new URL(env.HA_URL); } catch { throw new Error("HA_URL must be a valid http or https URL"); }
-  if (!["http:", "https:"].includes(haUrl.protocol)) throw new Error("HA_URL must use http or https");
+  const outputDirectory = path.resolve(env.OUTPUT_DIRECTORY || "/data");
   const shared = {
-    haUrl: haUrl.toString().replace(/\/$/, ""),
-    accessToken: env.HA_ACCESS_TOKEN,
-    outputDirectory: path.resolve(env.OUTPUT_DIRECTORY || "/data"),
+    outputDirectory,
     port: integerValue(env.PORT, "PORT", 3000, { min: 1, max: 65535 }),
     ignoreHttpsErrors: booleanValue(env.IGNORE_HTTPS_ERRORS, "IGNORE_HTTPS_ERRORS", false),
-    configUsername: stringValue(env.CONFIG_USERNAME, "CONFIG_USERNAME", "admin"),
-    configPassword: env.CONFIG_PASSWORD,
-    configFile: path.resolve(env.CONFIG_FILE || ""),
-    imageScheduleTimezone: timezoneValue(env.IMAGE_SCHEDULE_TIMEZONE, "IMAGE_SCHEDULE_TIMEZONE"),
+    configFile: path.join(outputDirectory, "config.json"),
   };
-  const definition = loadDefinition(env);
+  const definition = loadDefinition(shared.configFile);
   const isEmptyBootstrap = Array.isArray(definition?.tasks) && definition.tasks.length === 0
-    && Array.isArray(definition.images) && definition.images.length === 0;
+    && Array.isArray(definition.images) && definition.images.length === 0
+    && (!definition.settings || Object.keys(definition.settings).length === 0);
   const normalized = isEmptyBootstrap
-    ? { tasks: [], images: [] }
+    ? {
+      haUrl: "", accessToken: "", imageScheduleTimezone: "UTC",
+      configUsername: "admin", configPassword: "", tasks: [], images: [], configured: false,
+    }
     : normalizeConfiguration(definition, shared);
-  return { ...shared, ...normalized };
+  return { ...shared, ...normalized, configured: !isEmptyBootstrap };
 }

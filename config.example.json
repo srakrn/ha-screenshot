@@ -1,4 +1,11 @@
 {
+  "settings": {
+    "haUrl": "http://homeassistant.local:8123",
+    "accessToken": "replace-with-a-long-lived-access-token",
+    "imageScheduleTimezone": "Asia/Bangkok",
+    "configUsername": "admin",
+    "configPassword": "change-this-editor-password"
+  },
   "tasks": [
     {
       "id": "overview",

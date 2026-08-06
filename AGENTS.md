@@ -8,7 +8,7 @@ Keep the service focused on one job: periodically produce a deterministic dashbo
 
 ## Repository layout
 
-- `src/config.js` parses and validates environment configuration.
+- `src/config.js` parses and validates deployment and persisted web configuration.
 - `src/capture.js` authenticates to Home Assistant, renders the dashboard, applies visual modifications, and atomically writes the image.
 - `src/service.js` creates an independent scheduler per task and defines the public HTTP routes.
 - `src/schedule.js` resolves weekly image-feed schedules in the configured timezone.
@@ -52,7 +52,7 @@ docker compose up
 - A failed capture must not replace the last successful image. The scheduler should record the error and retry at the next interval.
 - Keep image responses cache-disabled because many display clients poll the same URL repeatedly.
 - Persist editor changes atomically and hot-apply them only after complete validation.
-- The service may expose the rendered image without authentication, but it must never expose `HA_ACCESS_TOKEN` in responses, URLs, logs, screenshots, or error details.
+- The service may expose the rendered image without authentication, but it must never expose the Home Assistant access token in responses, URLs, logs, screenshots, or error details.
 - Keep editor credentials server-side, protect both its static UI and API, and require the mutation header on write/trigger requests.
 - Inject Home Assistant credentials only into storage belonging to the configured Home Assistant origin. Do not inject them into embedded cross-origin frames.
 - Always close browser contexts after a capture and close Chromium during graceful shutdown.
@@ -61,18 +61,18 @@ docker compose up
 
 ## Configuration changes
 
-Environment variables and screenshot task fields are the public API of this service. When adding or changing one:
+Web settings, deployment environment variables, and screenshot task fields are the public API of this service. When adding or changing one:
 
 1. Validate it in `src/config.js` with a safe default and useful error message.
 2. Add or update tests in `test/config.test.js`.
-3. Document shared settings in `.env.example`; document task and feed settings in `config.example.json` and `README.md`.
+3. Document deployment-only settings in `.env.example`; document web, task, and feed settings in `config.example.json` and `README.md`.
 4. Avoid introducing secrets with command-line arguments or URL query parameters.
 
 Do not commit a real `.env`, `tasks.json`, Home Assistant token, captured dashboard, or user-provided `custom.css` file.
 
-At least one explicitly configured task is required through writable `CONFIG_FILE`. Do not add an implicit capture-task fallback. Scheduled image feeds define their own explicit fallback task.
+At least one explicitly configured task is required after first-run bootstrap. Do not add an implicit capture-task fallback. Scheduled image feeds define their own explicit fallback task.
 
-In Docker, use `/config/config.json` and mount the containing `/config` directory. Do not recommend mounting only the file because atomic replacement requires creating and renaming a sibling temporary file.
+Store the atomic configuration at `OUTPUT_DIRECTORY/config.json`; in Docker this is `/data/config.json` on the persistent data volume. Keep the configuration private because it contains the Home Assistant token and editor password.
 
 ## HTTP behavior
 
@@ -81,7 +81,7 @@ In Docker, use `/config/config.json` and mount the containing `/config` director
 - `/images/<image-id>` serves the task selected by a scheduled image feed without triggering capture work.
 - `/api/gallery` exposes only public gallery metadata, task status, and current feed selection.
 - `/healthz` returns HTTP 503 until every configured task has an image and reports task and feed state.
-- `/admin/`, `/api/config`, and manual capture mutations require editor authentication; public image routes must not inherit that requirement.
+- After first-run bootstrap, `/admin/`, `/api/config`, and manual capture mutations require editor authentication; public image routes must not inherit that requirement.
 - The initial capture runs asynchronously, so HTTP 503 during startup is expected.
 - Keep the image endpoint unauthenticated unless the product requirements explicitly change.
 - New public endpoints must not provide a cheap way for arbitrary clients to create unbounded Chromium work.
@@ -89,6 +89,8 @@ In Docker, use `/config/config.json` and mount the containing `/config` director
 ## Testing expectations
 
 Run `npm test` after every behavioral change. Add focused tests for configuration validation, scheduling, error retention, and HTTP behavior when practical.
+
+After completing and verifying requested changes, commit the scoped work automatically unless the user explicitly asks not to commit. Never include secrets, generated captures, or unrelated user changes in that commit.
 
 For capture changes, also verify against a real or representative Home Assistant dashboard when credentials are available:
 

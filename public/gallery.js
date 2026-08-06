@@ -57,8 +57,11 @@ async function loadGallery() {
     document.querySelector("#images-empty").hidden = body.images.length !== 0;
     document.querySelector("#timezone").textContent = `Weekly timezone: ${body.timezone}`;
     const all = [...body.images, ...body.tasks];
-    summary.textContent = `${all.filter((item) => item.status.ready).length} of ${all.length} images ready`;
-    updated.textContent = `Updated ${new Date().toLocaleTimeString()}`;
+    const empty = all.length === 0;
+    document.querySelector("#gallery-empty").hidden = !empty;
+    document.querySelector("#gallery-content").hidden = empty;
+    summary.textContent = empty ? "Setup required" : `${all.filter((item) => item.status.ready).length} of ${all.length} images ready`;
+    updated.textContent = empty ? "" : `Updated ${new Date().toLocaleTimeString()}`;
     document.querySelector("#error").hidden = true;
   } catch (error) {
     const element = document.querySelector("#error"); element.textContent = error.message; element.hidden = false;

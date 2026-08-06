@@ -5,11 +5,12 @@ const saveState = document.querySelector("#save-state");
 const saveButton = document.querySelector("#save-config");
 const taskForm = document.querySelector("#task-form");
 const imageForm = document.querySelector("#image-form");
+const settingsForm = document.querySelector("#settings-form");
 const taskModal = new bootstrap.Modal("#task-modal");
 const imageModal = new bootstrap.Modal("#image-modal");
 const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const dayIndex = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-let draft = { tasks: [], images: [] };
+let draft = { settings: {}, tasks: [], images: [] };
 let timezone = "UTC";
 let dirty = false;
 let editingTask = -1;
@@ -126,6 +127,8 @@ function renderTasks() {
     actions.append(group);
     tasksBody.append(row);
   }
+  document.querySelector("#tasks-table").hidden = draft.tasks.length === 0;
+  document.querySelector("#tasks-empty").hidden = draft.tasks.length !== 0;
   document.querySelector("#task-count").textContent = draft.tasks.length;
 }
 
@@ -153,6 +156,7 @@ function renderImages() {
     imagesBody.append(row);
   }
   document.querySelector("#images-empty").hidden = draft.images.length !== 0;
+  document.querySelector("#add-image").disabled = draft.tasks.length === 0;
   document.querySelector("#image-count").textContent = draft.images.length;
 }
 
@@ -288,10 +292,16 @@ imagesBody.addEventListener("click", (event) => {
 });
 
 document.querySelector("#add-task").addEventListener("click", () => {
+  openNewTask();
+});
+function openNewTask() {
   const id = uniqueId("new-task", new Set(draft.tasks.map((task) => task.id)));
   editingTask = -1; setTaskForm({ ...taskDefaults, id, outputFilename: `${id}.png` }); taskModal.show();
-});
+}
+document.querySelector("#empty-add-task").addEventListener("click", openNewTask);
+document.querySelector("#setup-add-task").addEventListener("click", openNewTask);
 document.querySelector("#add-image").addEventListener("click", () => {
+  if (!draft.tasks.length) return showNotice("Add a capture task before creating an image URL.");
   const id = uniqueId("new-image", new Set(draft.images.map((image) => image.id)));
   openImageEditor({ id, fallbackTaskId: draft.tasks[0].id, slots: [] }, -1);
 });
@@ -341,20 +351,54 @@ async function loadConfiguration() {
     const response = await fetch("/api/config", { cache: "no-store" });
     if (!response.ok) throw new Error("Could not load configuration");
     const body = await response.json();
-    timezone = body.timezone; draft = { tasks: body.tasks, images: body.images };
-    document.querySelector("#schedule-timezone").textContent = timezone;
-    render(); markSaved();
+    applyConfiguration(body);
+    if (body.setupRequired) bootstrap.Tab.getOrCreateInstance(document.querySelector("#settings-tab")).show();
   } catch (error) { showNotice(error.message); }
 }
+
+function applyConfiguration(body) {
+  timezone = body.settings.imageScheduleTimezone;
+  draft = { settings: body.settings, tasks: body.tasks, images: body.images };
+  settingsForm.elements.haUrl.value = body.settings.haUrl || "";
+  settingsForm.elements.imageScheduleTimezone.value = timezone;
+  settingsForm.elements.configUsername.value = body.settings.configUsername || "admin";
+  settingsForm.elements.accessToken.value = "";
+  settingsForm.elements.configPassword.value = "";
+  settingsForm.elements.accessToken.required = !body.settings.accessTokenConfigured;
+  settingsForm.elements.configPassword.required = !body.settings.configPasswordConfigured;
+  settingsForm.elements.accessToken.placeholder = body.settings.accessTokenConfigured ? "Leave blank to keep the current token" : "Paste a long-lived access token";
+  settingsForm.elements.configPassword.placeholder = body.settings.configPasswordConfigured ? "Leave blank to keep the current password" : "At least 12 characters";
+  document.querySelector("#setup-notice").hidden = !body.setupRequired;
+  document.querySelector("#schedule-timezone").textContent = timezone;
+  render(); markSaved();
+}
+
+settingsForm.addEventListener("input", markDirty);
 
 saveButton.addEventListener("click", async () => {
   notice.hidden = true; saveButton.disabled = true; saveButton.textContent = "Saving…";
   try {
+    if (!settingsForm.reportValidity()) throw new Error("Complete the required service settings.");
+    if (!draft.tasks.length) throw new Error("Add at least one capture task before saving.");
+    const settings = {
+      haUrl: settingsForm.elements.haUrl.value.trim(),
+      accessToken: settingsForm.elements.accessToken.value.trim() || undefined,
+      imageScheduleTimezone: settingsForm.elements.imageScheduleTimezone.value.trim(),
+      configUsername: settingsForm.elements.configUsername.value.trim(),
+      configPassword: settingsForm.elements.configPassword.value || undefined,
+    };
+    const credentialsChanged = Boolean(settings.configPassword)
+      || settings.configUsername !== draft.settings.configUsername;
     const tasks = draft.tasks.map(({ status, imageUrl, ...task }) => task);
     const images = draft.images.map(({ status, imageUrl, activeTaskId, width, height, format, ...image }) => image);
-    const response = await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json", "X-Requested-With": "ha-screenshot" }, body: JSON.stringify({ tasks, images }) });
+    const response = await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json", "X-Requested-With": "ha-screenshot" }, body: JSON.stringify({ settings, tasks, images }) });
     const body = await response.json(); if (!response.ok) throw new Error(body.error || "Configuration could not be saved");
-    await loadConfiguration(); showNotice("Configuration saved and applied.", "success");
+    applyConfiguration(body);
+    if (credentialsChanged) {
+      window.location.assign("/admin/");
+      return;
+    }
+    showNotice("Configuration saved and applied.", "success");
   } catch (error) { showNotice(error.message); } finally { saveButton.disabled = false; saveButton.textContent = "Save & apply"; }
 });
 

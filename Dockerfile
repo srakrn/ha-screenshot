@@ -11,10 +11,10 @@ COPY --from=dependencies --chown=pwuser:pwuser /app/node_modules ./node_modules
 COPY --chown=pwuser:pwuser package.json ./
 COPY --chown=pwuser:pwuser src ./src
 COPY --chown=pwuser:pwuser public ./public
-RUN mkdir -p /data /config && chown pwuser:pwuser /data /config
+RUN mkdir -p /data && chown pwuser:pwuser /data
 USER pwuser
 EXPOSE 3000
-VOLUME ["/data", "/config"]
+VOLUME ["/data"]
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "src/index.js"]

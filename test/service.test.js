@@ -44,11 +44,11 @@ async function httpFixture(t) {
     getService(id) { return services.find((service) => service.task.id === id); },
     getImage(id) { return id === image.id ? image : undefined; },
     resolveImage() { return services[0]; },
-    configuration() { return { tasks: services.map((service) => service.task), images: [image] }; },
+    configuration() { return { settings: { haUrl: "http://homeassistant.local:8123", accessToken: "secret", imageScheduleTimezone: "UTC", configUsername: "admin", configPassword: "editor-secret" }, tasks: services.map((service) => service.task), images: [image] }; },
     async replace(value) { return value; },
     refresh(id) { return this.getService(id) ? Promise.resolve() : null; },
   };
-  const config = { configUsername: "admin", configPassword: "editor-secret", imageScheduleTimezone: "UTC", images: [image] };
+  const config = { configured: true, configUsername: "admin", configPassword: "editor-secret", imageScheduleTimezone: "UTC", images: [image] };
   const server = createApp(manager, config, { now: () => new Date("2026-08-03T07:00:00Z") }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
@@ -82,10 +82,42 @@ test("protects configuration reads and mutations", async (t) => {
   const { base } = await httpFixture(t);
   assert.equal((await fetch(`${base}/api/config`)).status, 401);
   const authorization = `Basic ${Buffer.from("admin:editor-secret").toString("base64")}`;
-  assert.equal((await fetch(`${base}/api/config`, { headers: { authorization } })).status, 200);
+  const configResponse = await fetch(`${base}/api/config`, { headers: { authorization } });
+  const configBody = await configResponse.json();
+  assert.equal(configResponse.status, 200);
+  assert.equal(configBody.settings.accessTokenConfigured, true);
+  assert.equal(configBody.settings.configPasswordConfigured, true);
+  assert.equal("accessToken" in configBody.settings, false);
+  assert.equal("configPassword" in configBody.settings, false);
   assert.equal((await fetch(`${base}/api/config`, { method: "PUT", headers: { authorization, "content-type": "application/json" }, body: JSON.stringify({ tasks: [], images: [] }) })).status, 403);
   assert.equal((await fetch(`${base}/api/tasks/morning/capture`, { method: "POST", headers: { authorization } })).status, 403);
   assert.equal((await fetch(`${base}/api/tasks/morning/capture`, { method: "POST", headers: { authorization, "x-requested-with": "ha-screenshot" } })).status, 202);
+});
+
+test("allows first-run setup without editor credentials", async (t) => {
+  const manager = {
+    services: [],
+    configuration() {
+      return {
+        settings: { haUrl: "", accessToken: "", imageScheduleTimezone: "UTC", configUsername: "admin", configPassword: "" },
+        tasks: [],
+        images: [],
+      };
+    },
+  };
+  const config = { configured: false, imageScheduleTimezone: "UTC", images: [] };
+  const server = createApp(manager, config).listen(0, "127.0.0.1");
+  await new Promise((resolve) => server.once("listening", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const base = `http://127.0.0.1:${server.address().port}`;
+
+  const admin = await fetch(`${base}/admin/`);
+  const api = await fetch(`${base}/api/config`);
+  const gallery = await (await fetch(`${base}/api/gallery`)).json();
+  assert.equal(admin.status, 200);
+  assert.equal(api.status, 200);
+  assert.equal((await api.json()).setupRequired, true);
+  assert.equal(gallery.setupRequired, true);
 });
 
 test("returns 503 without replacing or exposing a missing image", async (t) => {

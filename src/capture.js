@@ -70,13 +70,13 @@ export class DashboardCapture {
       await page.goto(task.dashboardUrl, { waitUntil: "domcontentloaded" });
 
       if (new URL(page.url()).pathname.includes("/auth/")) {
-        throw new Error("Home Assistant showed the login page; check HA_ACCESS_TOKEN and HA_URL");
+        throw new Error("Home Assistant showed the login page; check the URL and access token in Settings");
       }
 
       await page.waitForSelector(task.waitForSelector, { state: "attached" });
       if (task.waitAfterLoadMs > 0) await page.waitForTimeout(task.waitAfterLoadMs);
       if (new URL(page.url()).pathname.includes("/auth/")) {
-        throw new Error("Home Assistant showed the login page; check HA_ACCESS_TOKEN and HA_URL");
+        throw new Error("Home Assistant showed the login page; check the URL and access token in Settings");
       }
 
       await page.evaluate((zoom) => {
