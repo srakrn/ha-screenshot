@@ -29,6 +29,8 @@ The canonical public routes are:
 
 Both routes are cache-disabled. They return HTTP 503 until the selected task has produced its first successful image. Scheduled image requests only select an existing capture file; they never trigger Chromium.
 
+To show these images on Seeed Studio's ESPHome-based TRMNL 7.5-inch (OG) DIY Kit, including physical page navigation and a compact battery indicator, see the [ESPHome display guide](docs/esphome-trmnl-diy-kit.md).
+
 ### Portainer stack
 
 [`compose.portainer.yaml`](compose.portainer.yaml) is a Portainer-friendly stack example that uses a published container image. Before deploying it:
