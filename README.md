@@ -18,7 +18,7 @@ A Dockerized Chromium service that periodically captures Home Assistant dashboar
    ```
 
 4. Open `/admin/`, enter the Home Assistant connection and editor credentials in **Settings**, add a capture task, then save. The first-run editor is open only until this initial configuration is saved.
-5. Open `/` for the public gallery.
+5. Open `/` and sign in with the same editor credentials to view the gallery.
 
 The canonical public routes are:
 
@@ -152,7 +152,7 @@ All other service settings are managed through `/admin/`. The service itself lis
 - `GET /api/config` and `PUT /api/config` require editor authentication. The mutation also requires `X-Requested-With: ha-screenshot`.
 - `POST /api/tasks/:id/capture` requires the same authentication and mutation header.
 
-The public image and health routes remain unauthenticated. Before initial setup, the editor is also open so credentials can be created. Keep port 3000 on a trusted network during setup and add network-level access control or an HTTPS reverse proxy when exposing it outside a trusted LAN. HTTP Basic credentials are encoded, not encrypted.
+The gallery and editor pages share the same HTTP Basic authentication after setup. Public image, gallery-metadata, and health routes remain unauthenticated so display clients can poll without credentials. Before initial setup, both pages are open so credentials can be created. Keep port 3000 on a trusted network during setup and add network-level access control or an HTTPS reverse proxy when exposing it outside a trusted LAN. HTTP Basic credentials are encoded, not encrypted.
 
 The frontend loads pinned Bootstrap 5.3.8 assets from jsDelivr with Subresource Integrity. Browsers need access to that CDN for the styled admin and gallery interfaces; image endpoints do not depend on the CDN.
 

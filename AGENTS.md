@@ -76,7 +76,7 @@ Store the atomic configuration at `OUTPUT_DIRECTORY/config.json`; in Docker this
 
 ## HTTP behavior
 
-- `/` serves the public screenshot gallery.
+- `/` serves the authenticated screenshot gallery after first-run bootstrap.
 - `/screenshots/<task-id>` serves each named task's latest successful image.
 - `/images/<image-id>` serves the task selected by a scheduled image feed without triggering capture work.
 - `/api/gallery` exposes only public gallery metadata, task status, and current feed selection.

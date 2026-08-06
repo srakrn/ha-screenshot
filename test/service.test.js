@@ -67,9 +67,11 @@ test("serves direct and scheduled images without legacy aliases", async (t) => {
   assert.equal((await fetch(`${base}/images/missing`)).status, 404);
 });
 
-test("returns public gallery and health metadata", async (t) => {
+test("serves the authenticated gallery and public health metadata", async (t) => {
   const { base } = await httpFixture(t);
-  const pageResponse = await fetch(`${base}/`); const page = await pageResponse.text();
+  assert.equal((await fetch(`${base}/`)).status, 401);
+  const authorization = `Basic ${Buffer.from("admin:editor-secret").toString("base64")}`;
+  const pageResponse = await fetch(`${base}/`, { headers: { authorization } }); const page = await pageResponse.text();
   assert.match(pageResponse.headers.get("content-security-policy"), /https:\/\/cdn\.jsdelivr\.net/);
   assert.match(page, /bootstrap@5\.3\.8/); assert.match(page, /integrity="sha384-/);
   const galleryResponse = await fetch(`${base}/api/gallery`); const gallery = await galleryResponse.json();
@@ -112,9 +114,11 @@ test("allows first-run setup without editor credentials", async (t) => {
   const base = `http://127.0.0.1:${server.address().port}`;
 
   const admin = await fetch(`${base}/admin/`);
+  const galleryPage = await fetch(`${base}/`);
   const api = await fetch(`${base}/api/config`);
   const gallery = await (await fetch(`${base}/api/gallery`)).json();
   assert.equal(admin.status, 200);
+  assert.equal(galleryPage.status, 200);
   assert.equal(api.status, 200);
   assert.equal((await api.json()).setupRequired, true);
   assert.equal(gallery.setupRequired, true);

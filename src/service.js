@@ -160,7 +160,7 @@ export function createApp(manager, config, { now = () => new Date() } = {}) {
   const requireConfigAuth = configAuth(config);
   app.disable("x-powered-by");
 
-  app.get("/", (request, response) => {
+  app.get("/", requireConfigAuth, (request, response) => {
     pageHeaders(response);
     return response.sendFile(path.join(publicDirectory, "gallery.html"));
   });
