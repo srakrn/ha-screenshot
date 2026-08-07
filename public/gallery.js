@@ -13,7 +13,8 @@ function intervalLabel(seconds) {
 function statusBadge(status) {
   const badge = document.createElement("span");
   badge.className = "badge";
-  if (status.lastError) { badge.classList.add("text-bg-danger"); badge.textContent = "Error"; }
+  if (status.stale) { badge.classList.add("text-bg-danger"); badge.textContent = "Stale"; }
+  else if (status.lastError) { badge.classList.add("text-bg-danger"); badge.textContent = "Error"; }
   else if (status.capturing) { badge.classList.add("text-bg-warning"); badge.textContent = "Capturing"; }
   else if (status.ready) { badge.classList.add("text-bg-success"); badge.textContent = "Ready"; }
   else { badge.classList.add("text-bg-secondary"); badge.textContent = "Starting"; }
@@ -31,7 +32,7 @@ function card(item, scheduled) {
   const column = document.createElement("div"); column.className = "col-12 col-lg-6";
   const article = document.createElement("article"); article.className = "card h-100 shadow-sm";
   const target = document.createElement("a"); target.href = item.imageUrl; target.target = "_blank"; target.rel = "noreferrer"; target.className = "border-bottom text-decoration-none";
-  if (item.status.ready) {
+  if (item.status.imageAvailable) {
     const image = document.createElement("img"); image.className = "card-img-top preview-card"; image.alt = `${item.id} dashboard image`; image.src = `${item.imageUrl}?gallery=${Date.now()}`; target.append(image);
   } else {
     const placeholder = document.createElement("div"); placeholder.className = "preview-card d-flex align-items-center justify-content-center text-body-secondary"; placeholder.textContent = "Waiting for first capture"; target.append(placeholder);

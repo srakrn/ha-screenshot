@@ -197,6 +197,7 @@ function taskFromDefinition(definition, index, shared, customCssById) {
     format,
     jpegQuality: integerValue(definition.jpegQuality, `${label}.jpegQuality`, 85, { min: 1, max: 100 }),
     refreshIntervalSeconds: integerValue(definition.refreshIntervalSeconds, `${label}.refreshIntervalSeconds`, 300, { min: 0 }),
+    maximumImageAgeSeconds: integerValue(definition.maximumImageAgeSeconds, `${label}.maximumImageAgeSeconds`, 0, { min: 0 }),
     navigationTimeoutMs: integerValue(definition.navigationTimeoutMs, `${label}.navigationTimeoutMs`, 60000, { min: 1000 }),
     waitAfterLoadMs: integerValue(definition.waitAfterLoadMs, `${label}.waitAfterLoadMs`, 3000, { min: 0 }),
     waitForSelector: stringValue(definition.waitForSelector, `${label}.waitForSelector`, "home-assistant"),
@@ -330,7 +331,8 @@ export function normalizeConfiguration(definition, shared) {
 export function taskToDefinition(task) {
   return {
     id: task.id, dashboardPath: task.dashboardPath, width: task.width, height: task.height,
-    refreshIntervalSeconds: task.refreshIntervalSeconds, waitAfterLoadMs: task.waitAfterLoadMs,
+    refreshIntervalSeconds: task.refreshIntervalSeconds, maximumImageAgeSeconds: task.maximumImageAgeSeconds,
+    waitAfterLoadMs: task.waitAfterLoadMs,
     colorScheme: task.colorScheme, timezone: task.timezone, disableAnimations: task.disableAnimations,
     zoom: task.zoom, format: task.format, jpegQuality: task.jpegQuality,
     navigationTimeoutMs: task.navigationTimeoutMs, waitForSelector: task.waitForSelector,

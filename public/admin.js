@@ -22,7 +22,7 @@ let editingImage = -1;
 
 const taskDefaults = {
   id: "new-task", dashboardPath: "/lovelace/0", width: 800, height: 480,
-  refreshIntervalSeconds: 300, waitAfterLoadMs: 3000, colorScheme: "light",
+  refreshIntervalSeconds: 300, maximumImageAgeSeconds: 0, waitAfterLoadMs: 3000, colorScheme: "light",
   timezone: "UTC", disableAnimations: true, zoom: 1, format: "png", jpegQuality: 85,
   navigationTimeoutMs: 60000, waitForSelector: "home-assistant", customCss: "",
   customCssFile: "", customCssIds: [], hideCursor: true, outputFilename: "new-task.png",
@@ -72,7 +72,8 @@ function intervalLabel(seconds) {
 function badge(status) {
   const span = document.createElement("span");
   span.className = "badge";
-  if (status?.lastError) { span.classList.add("text-bg-danger"); span.textContent = "Error"; }
+  if (status?.stale) { span.classList.add("text-bg-danger"); span.textContent = "Stale"; }
+  else if (status?.lastError) { span.classList.add("text-bg-danger"); span.textContent = "Error"; }
   else if (status?.capturing) { span.classList.add("text-bg-warning"); span.textContent = "Capturing"; }
   else if (status?.ready) { span.classList.add("text-bg-success"); span.textContent = "Ready"; }
   else { span.classList.add("text-bg-secondary"); span.textContent = "Starting"; }
@@ -119,7 +120,7 @@ function renderTasks() {
   for (const task of draft.tasks) {
     const row = document.createElement("tr");
     const previewCell = row.insertCell();
-    previewCell.append(preview(task.imageUrl || `/screenshots/${task.id}`, task.status?.ready, `${task.id} screenshot`));
+    previewCell.append(preview(task.imageUrl || `/screenshots/${task.id}`, task.status?.imageAvailable, `${task.id} screenshot`));
     const name = row.insertCell();
     const strong = document.createElement("strong"); strong.textContent = task.id;
     name.append(strong, document.createElement("br"), link(task.imageUrl || `/screenshots/${task.id}`));
@@ -149,7 +150,7 @@ function renderImages() {
     const fallback = draft.tasks.find((task) => task.id === item.fallbackTaskId);
     const active = draft.tasks.find((task) => task.id === item.activeTaskId) || fallback;
     const row = document.createElement("tr");
-    row.insertCell().append(preview(item.imageUrl || `/images/${item.id}`, item.status?.ready, `${item.id} scheduled image`));
+    row.insertCell().append(preview(item.imageUrl || `/images/${item.id}`, item.status?.imageAvailable, `${item.id} scheduled image`));
     const name = row.insertCell(); const strong = document.createElement("strong"); strong.textContent = item.id;
     name.append(strong, document.createElement("br"), link(item.imageUrl || `/images/${item.id}`));
     const activeCell = row.insertCell(); activeCell.textContent = item.activeTaskId || item.fallbackTaskId; activeCell.append(document.createTextNode(" "), badge(item.status));
@@ -219,6 +220,7 @@ function readTask() {
     id: taskForm.elements.id.value.trim(), dashboardPath: taskForm.elements.dashboardPath.value.trim(),
     width: Number(taskForm.elements.width.value), height: Number(taskForm.elements.height.value),
     refreshIntervalSeconds: Number(taskForm.elements.refreshIntervalSeconds.value),
+    maximumImageAgeSeconds: Number(taskForm.elements.maximumImageAgeSeconds.value),
     waitAfterLoadMs: Number(taskForm.elements.waitAfterLoadMs.value), colorScheme: taskForm.elements.colorScheme.value,
     timezone: taskForm.elements.timezone.value.trim(), disableAnimations: taskForm.elements.disableAnimations.checked,
     zoom: Number(taskForm.elements.zoom.value), format: taskForm.elements.format.value,

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed implementation plan. This document does not describe shipped functionality.
+Implemented.
 
 ## Goal
 
@@ -32,4 +32,4 @@ Add optional task field `maximumImageAgeSeconds`. `0` means that age does not af
 
 ## Invariants and rollout
 
-Exact dimensions, atomic writes, last-good retention, and cache-disabled delivery remain unchanged. Existing tasks default to unlimited age, so the feature is backward compatible. No new state file is required; image metadata comes from the output file and in-memory scheduler state.
+Exact dimensions, atomic writes, and last-good retention remain unchanged. Combined with Plan 3, image delivery uses mandatory revalidation instead of `no-store`. Existing tasks default to unlimited age, so the health behavior is backward compatible. No new state file is required; image metadata comes from the output file and in-memory scheduler state.

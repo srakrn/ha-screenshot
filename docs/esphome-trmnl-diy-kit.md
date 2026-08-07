@@ -22,6 +22,7 @@ Create one capture task for each page that should be selectable on the display. 
   "width": 800,
   "height": 480,
   "refreshIntervalSeconds": 300,
+  "maximumImageAgeSeconds": 900,
   "format": "png"
 }
 ```
@@ -41,7 +42,7 @@ A scheduled image feed also works:
 http://192.168.1.50:3000/images/kitchen
 ```
 
-Use `/screenshots/<task-id>` when a physical page must always show one task. Use `/images/<image-id>` when the server should change that page automatically according to a weekly schedule. Both endpoints are intentionally unauthenticated, cache-disabled, and do not start capture work when fetched.
+Use `/screenshots/<task-id>` when a physical page must always show one task. Use `/images/<image-id>` when the server should change that page automatically according to a weekly schedule. Both endpoints are intentionally unauthenticated and do not start capture work when fetched. They require revalidation on every poll and use standard `ETag` and `Last-Modified` validators, allowing ESPHome to receive HTTP 304 without downloading an unchanged PNG.
 
 The endpoint returns HTTP 503 until its task has produced a first successful image. Finish configuring the screenshot service and confirm both URLs in a browser before troubleshooting ESPHome.
 
@@ -89,10 +90,11 @@ image:
     update_interval: 5min
     on_download_finished:
       then:
-        # Repaint only when this image is the visible page.
+        # A 304 response is a cache hit. Repaint only for a newly downloaded
+        # image that is currently visible.
         - if:
             condition:
-              lambda: return id(page_index) == 0;
+              lambda: return !cached && id(page_index) == 0;
             then:
               - component.update: epaper_display
 
@@ -107,7 +109,7 @@ image:
       then:
         - if:
             condition:
-              lambda: return id(page_index) == 1;
+              lambda: return !cached && id(page_index) == 1;
             then:
               - component.update: epaper_display
 
@@ -265,8 +267,8 @@ Validate and install the configuration from ESPHome Device Builder. For the firs
 
 Expected behavior:
 
-1. Each online image is downloaded every five minutes.
-2. A successful download refreshes the panel only if that image is currently visible.
+1. Each online image is checked every five minutes. ESPHome sends the validators from the previous response.
+2. An unchanged image receives HTTP 304, transfers no PNG body, and does not refresh the panel. A fresh download refreshes the panel only if that image is currently visible.
 3. KEY1 selects the next page and KEY2 selects the previous page.
 4. The server keeps generating screenshots on its own schedule; fetching an image never launches Chromium.
 5. If an image download fails, the display keeps its e-paper contents and retries at the next interval.
@@ -275,7 +277,9 @@ The 70 x 18 pixel battery badge intentionally paints a white background over the
 
 ## Refresh and power considerations
 
-The screenshot service and ESPHome have independent intervals. A sensible starting point is five minutes for both `refreshIntervalSeconds` and `image.update_interval`. Shorter ESPHome polling does not make the server capture faster.
+The screenshot service and ESPHome have independent intervals. A sensible starting point is five minutes for both `refreshIntervalSeconds` and `image.update_interval`, with `maximumImageAgeSeconds` set comfortably above the capture interval (for example, 15 minutes). Shorter ESPHome polling does not make the server capture faster, although conditional polling makes unchanged checks inexpensive.
+
+ESPHome's `online_image` cache validators live in memory and are reset when the device reboots. The first request after boot therefore downloads the full PNG; later unchanged polls receive HTTP 304. The `cached` variable in `on_download_finished` is `true` for those cache hits, which is why the example avoids an unnecessary e-paper refresh.
 
 Every page press performs a full panel update. E-paper updates are slow and consume much more power than retaining an image, so avoid rapid button presses and very short update intervals.
 

@@ -27,7 +27,7 @@ The canonical public routes are:
 /images/hallway-display     stable scheduled image feed
 ```
 
-Both routes are cache-disabled. They return HTTP 503 until the selected task has produced its first successful image. Scheduled image requests only select an existing capture file; they never trigger Chromium.
+Both routes require caches to revalidate on every request and support `ETag`, `Last-Modified`, conditional `GET`, and `HEAD`. An unchanged conditional request returns HTTP 304 without transferring the image again. They return HTTP 503 until the selected task has produced its first successful image. Scheduled image requests only select an existing capture file; they never trigger Chromium.
 
 To show these images on Seeed Studio's ESPHome-based TRMNL 7.5-inch (OG) DIY Kit, including physical page navigation and a compact battery indicator, see the [ESPHome display guide](docs/esphome-trmnl-diy-kit.md).
 
@@ -75,6 +75,7 @@ The complete configuration is saved atomically and hot-applied by the web editor
       "width": 800,
       "height": 480,
       "refreshIntervalSeconds": 300,
+      "maximumImageAgeSeconds": 900,
       "timezone": "Asia/Bangkok",
       "format": "png",
       "customCssIds": ["eink-cards"],
@@ -139,6 +140,7 @@ The **Schedule timezone** web setting controls weekly schedule selection globall
 | `dashboardPath` | `/lovelace/0` | Path relative to the Home Assistant URL, or an absolute dashboard URL |
 | `width` / `height` | `800` / `480` | Exact output dimensions in pixels |
 | `refreshIntervalSeconds` | `300` | Capture period; `0` means startup only |
+| `maximumImageAgeSeconds` | `0` | Maximum last-good image age before readiness becomes stale; `0` disables the age limit |
 | `waitAfterLoadMs` | `3000` | Additional render time after Home Assistant loads |
 | `colorScheme` | `light` | Browser preference: `light` or `dark` |
 | `timezone` | `UTC` | Browser IANA timezone for dashboard dates and clocks |
@@ -173,7 +175,8 @@ All other service settings are managed through `/admin/`. The service itself lis
 ## HTTP API and health
 
 - `GET /api/gallery` returns only public task/feed metadata and current feed selections.
-- `GET /healthz` returns task status plus every feed's active task and readiness. It remains HTTP 503 until every capture task has an image.
+- `GET /healthz` returns unified task/feed status. It returns HTTP 503 with `starting` while an image is missing or `degraded` when any configured age limit is exceeded.
+- `GET` and `HEAD` on `/screenshots/:taskId` and `/images/:imageId` return strong `ETag`, `Last-Modified`, `Content-Length`, stale-state headers, and mandatory-revalidation cache policy. Conditional `GET` returns HTTP 304 when the selected image is unchanged.
 - `GET /api/config` and `PUT /api/config` require editor authentication. The mutation also requires `X-Requested-With: ha-screenshot`.
 - `POST /api/tasks/:id/capture` requires the same authentication and mutation header.
 
