@@ -17,7 +17,7 @@ A Dockerized Chromium service that periodically captures Home Assistant dashboar
    docker compose up -d --build
    ```
 
-4. Open `/admin/`, enter the Home Assistant connection and editor credentials in **Settings**, add a capture task, then save. The first-run editor is open only until this initial configuration is saved.
+4. Open `/admin/`, enter the Home Assistant connection and editor credentials in **Settings**, then save. Capture tasks can be added now or later. The first-run editor is open only until this initial configuration is saved.
 5. Open `/` and sign in with the same editor credentials to view the gallery.
 
 The canonical public routes are:
@@ -116,7 +116,7 @@ The complete configuration is saved atomically and hot-applied by the web editor
 }
 ```
 
-If `OUTPUT_DIRECTORY/config.json` does not exist at startup, the service creates a private empty bootstrap configuration. The gallery shows a focused setup prompt and the editor remains unauthenticated until the first valid configuration is saved. That first save requires complete service settings and at least one task; `images` may be empty. Changes are fully validated before the file or running configuration is replaced. Schedule-only changes preserve running capture services and their current status.
+If `OUTPUT_DIRECTORY/config.json` does not exist at startup, the service creates a private empty bootstrap configuration. The gallery shows a focused setup prompt and the editor remains unauthenticated until the first valid configuration is saved. That first save requires complete service settings; `tasks` and `images` may be empty. Changes are fully validated before the file or running configuration is replaced. Schedule-only changes preserve running capture services and their current status.
 
 ### Scheduled image feeds
 

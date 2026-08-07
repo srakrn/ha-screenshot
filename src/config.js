@@ -216,9 +216,7 @@ function taskFromDefinition(definition, index, shared, customCssById) {
 }
 
 export function normalizeTasks(definitions, shared, customCsses = []) {
-  if (!Array.isArray(definitions) || definitions.length === 0) {
-    throw new Error("tasks must be a non-empty array");
-  }
+  if (!Array.isArray(definitions)) throw new Error("tasks must be an array");
   const customCssById = new Map(customCsses.map((entry) => [entry.id, entry.css]));
   const tasks = definitions.map((definition, index) => taskFromDefinition(definition, index, shared, customCssById));
   const ids = new Set();

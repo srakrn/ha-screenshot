@@ -326,7 +326,6 @@ tasksBody.addEventListener("click", async (event) => {
   const index = draft.tasks.findIndex((task) => task.id === button.dataset.id);
   if (button.dataset.action === "edit-task") { editingTask = index; setTaskForm(draft.tasks[index]); taskModal.show(); }
   if (button.dataset.action === "delete-task") {
-    if (draft.tasks.length === 1) return showNotice("At least one capture task is required.");
     const referenced = draft.images.find((image) => image.fallbackTaskId === button.dataset.id || image.slots.some((slot) => slot.taskId === button.dataset.id));
     if (referenced) return showNotice(`Task ${button.dataset.id} is used by image URL ${referenced.id}. Edit or delete that image URL first.`);
     draft.tasks.splice(index, 1); markDirty(); render();
@@ -483,7 +482,6 @@ saveButton.addEventListener("click", async () => {
   notice.hidden = true; saveButton.disabled = true; saveButton.textContent = "Saving…";
   try {
     if (!settingsForm.reportValidity()) throw new Error("Complete the required service settings.");
-    if (!draft.tasks.length) throw new Error("Add at least one capture task before saving.");
     const settings = {
       haUrl: settingsForm.elements.haUrl.value.trim(),
       accessToken: settingsForm.elements.accessToken.value.trim() || undefined,

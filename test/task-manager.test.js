@@ -84,6 +84,43 @@ test("persists web settings while preserving omitted secrets", async (t) => {
   assert.equal(manager.services[0].task.dashboardUrl, "https://homeassistant.example.test/lovelace/0");
 });
 
+test("persists first-run settings without capture tasks", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ha-screenshot-manager-bootstrap-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const config = {
+    outputDirectory: directory,
+    configFile: path.join(directory, "config.json"),
+    configured: false,
+    haUrl: "",
+    accessToken: "",
+    imageScheduleTimezone: "UTC",
+    configUsername: "admin",
+    configPassword: "",
+    customCsses: [],
+    tasks: [],
+    images: [],
+  };
+  await fs.writeFile(config.configFile, JSON.stringify({ settings: {}, customCsses: [], tasks: [], images: [] }));
+  const manager = new TaskManager({ async capture() { return { capturedAt: new Date() }; } }, config, silentLogger);
+  await manager.replace({
+    settings: {
+      haUrl: "http://homeassistant.local:8123",
+      accessToken: "secret",
+      imageScheduleTimezone: "Asia/Bangkok",
+      configUsername: "operator",
+      configPassword: "editor-secret",
+    },
+    tasks: [],
+    images: [],
+  });
+  assert.deepEqual(manager.services, []);
+  assert.equal(config.configured, true);
+  assert.equal(config.imageScheduleTimezone, "Asia/Bangkok");
+  const saved = JSON.parse(await fs.readFile(config.configFile, "utf8"));
+  assert.deepEqual(saved.tasks, []);
+  assert.deepEqual(saved.images, []);
+});
+
 test("failed validation neither persists nor replaces the running configuration", async (t) => {
   const config = await fixture(t);
   const manager = new TaskManager({}, config, silentLogger);

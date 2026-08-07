@@ -69,6 +69,13 @@ test("loads task defaults and global schedule timezone", () => {
   });
 });
 
+test("loads a configured service without capture tasks", () => {
+  const config = loadConfig(environment({ tasks: [], images: [] }));
+  assert.equal(config.configured, true);
+  assert.deepEqual(config.tasks, []);
+  assert.deepEqual(config.images, []);
+});
+
 test("normalizes reusable custom CSS and ordered task references", () => {
   const config = loadConfig(environment({
     customCsses: [
@@ -117,9 +124,9 @@ test("normalizes scheduled images and overnight ranges", () => {
 test("rejects malformed roots, task values, duplicate ids, and invalid timezone", () => {
   assert.throws(() => loadConfig(environment([{ id: "legacy" }])), /must contain an object/);
   const settings = { haUrl: "http://homeassistant.local:8123", accessToken: "secret", configUsername: "admin", configPassword: "editor-secret", imageScheduleTimezone: "UTC" };
-  assert.throws(() => normalizeConfiguration({ settings, tasks: [], images: [] }, {
+  assert.throws(() => normalizeConfiguration({ settings, tasks: {}, images: [] }, {
     outputDirectory: "/data",
-  }), /non-empty array/);
+  }), /tasks must be an array/);
   assert.throws(() => loadConfig(environment({ tasks: [{ id: "bad id" }], images: [] })), /id/);
   assert.throws(() => loadConfig(environment({ tasks: [{ id: "same" }, { id: "same" }], images: [] })), /Duplicate screenshot task id/);
   assert.throws(() => loadConfig(environment({ tasks: [{ id: "reserved", outputFilename: "config.json" }], images: [] })), /reserved/);
