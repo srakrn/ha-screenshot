@@ -137,6 +137,7 @@ function adminConfiguration(manager, config, now) {
       configUsername: definition.settings.configUsername,
       configPasswordConfigured: Boolean(definition.settings.configPassword),
     },
+    customCsses: definition.customCsses ?? [],
     tasks: definition.tasks.map((task) => ({
       ...task, imageUrl: `/screenshots/${task.id}`, status: statusById.get(task.id),
     })),
@@ -222,6 +223,7 @@ export function createApp(manager, config, { now = () => new Date() } = {}) {
     try {
       await manager.replace({
         settings: request.body?.settings,
+        customCsses: request.body?.customCsses,
         tasks: request.body?.tasks,
         images: request.body?.images,
       });

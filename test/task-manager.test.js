@@ -42,6 +42,24 @@ test("schedule-only updates preserve capture services and do not restart capture
   assert.equal(manager.getImage("feed").fallbackTaskId, "old");
 });
 
+test("persists reusable CSS and restarts tasks that consume changed CSS", async (t) => {
+  const config = await fixture(t);
+  const manager = new TaskManager({ async capture() { return { capturedAt: new Date() }; } }, config, silentLogger);
+  const originalService = manager.services[0];
+  await manager.replace({
+    customCsses: [{ id: "eink", css: "ha-card { border: 0; }" }],
+    tasks: [{ ...manager.definitions()[0], customCssIds: ["eink"] }],
+    images: [],
+  });
+  await manager.stop();
+  assert.notEqual(manager.services[0], originalService);
+  assert.deepEqual(manager.services[0].task.reusableCustomCss, ["ha-card { border: 0; }"]);
+  const saved = JSON.parse(await fs.readFile(config.configFile, "utf8"));
+  assert.deepEqual(saved.customCsses, [{ id: "eink", css: "ha-card { border: 0; }" }]);
+  assert.deepEqual(saved.tasks[0].customCssIds, ["eink"]);
+  assert.equal("reusableCustomCss" in saved.tasks[0], false);
+});
+
 test("persists web settings while preserving omitted secrets", async (t) => {
   const config = await fixture(t);
   const manager = new TaskManager({ async capture() { return { capturedAt: new Date() }; } }, config, silentLogger);

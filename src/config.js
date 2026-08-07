@@ -64,7 +64,7 @@ function loadDefinition(configFile) {
     fs.mkdirSync(configDirectory, { recursive: true });
     fs.accessSync(configDirectory, fs.constants.W_OK);
     if (!fs.existsSync(configFile)) {
-      fs.writeFileSync(configFile, `${JSON.stringify({ settings: {}, tasks: [], images: [] }, null, 2)}\n`, {
+      fs.writeFileSync(configFile, `${JSON.stringify({ settings: {}, customCsses: [], tasks: [], images: [] }, null, 2)}\n`, {
         encoding: "utf8",
         flag: "wx",
         mode: 0o600,
@@ -97,7 +97,58 @@ function normalizeSettings(definition) {
   };
 }
 
-function taskFromDefinition(definition, index, shared) {
+export function normalizeCustomCsses(definitions = []) {
+  if (!Array.isArray(definitions)) throw new Error("customCsses must be an array");
+  const ids = new Set();
+  return definitions.map((definition, index) => {
+    const label = `customCsses[${index}]`;
+    if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
+      throw new Error(`${label} must be an object`);
+    }
+    if (typeof definition.id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(definition.id)) {
+      throw new Error(`${label}.id must contain only letters, numbers, underscores, and hyphens`);
+    }
+    if (ids.has(definition.id)) throw new Error(`Duplicate custom CSS id: ${definition.id}`);
+    ids.add(definition.id);
+    return { id: definition.id, css: stringValue(definition.css, `${label}.css`, "", { allowEmpty: true }) };
+  });
+}
+
+function imageProcessingValue(definition, label) {
+  const value = definition ?? {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label}.imageProcessing must be an object`);
+  }
+  const mode = String(value.mode ?? "color").toLowerCase();
+  if (!["color", "grayscale", "monochrome"].includes(mode)) {
+    throw new Error(`${label}.imageProcessing.mode must be color, grayscale, or monochrome`);
+  }
+  const dither = String(value.dither ?? "none").toLowerCase();
+  if (!["none", "floyd-steinberg", "atkinson"].includes(dither)) {
+    throw new Error(`${label}.imageProcessing.dither must be none, floyd-steinberg, or atkinson`);
+  }
+  if (dither !== "none" && mode !== "monochrome") {
+    throw new Error(`${label}.imageProcessing.dither requires monochrome mode`);
+  }
+  const palette = value.palette ?? [];
+  if (!Array.isArray(palette) || palette.length > 0) {
+    throw new Error(`${label}.imageProcessing.palette must be an empty array; custom palettes are not supported yet`);
+  }
+  const rotation = integerValue(value.rotation, `${label}.imageProcessing.rotation`, 0, { min: 0, max: 270 });
+  if (![0, 90, 180, 270].includes(rotation)) {
+    throw new Error(`${label}.imageProcessing.rotation must be 0, 90, 180, or 270`);
+  }
+  return {
+    mode,
+    palette: [],
+    dither,
+    threshold: integerValue(value.threshold, `${label}.imageProcessing.threshold`, 128, { min: 0, max: 255 }),
+    invert: booleanValue(value.invert, `${label}.imageProcessing.invert`, false),
+    rotation,
+  };
+}
+
+function taskFromDefinition(definition, index, shared, customCssById) {
   if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
     throw new Error(`tasks[${index}] must be an object`);
   }
@@ -125,6 +176,17 @@ function taskFromDefinition(definition, index, shared) {
   if (outputFilename === "config.json") {
     throw new Error(`${label}.outputFilename is reserved for the service configuration`);
   }
+  const customCssIds = definition.customCssIds ?? [];
+  if (!Array.isArray(customCssIds)) throw new Error(`${label}.customCssIds must be an array`);
+  const selectedCssIds = customCssIds.map((id, cssIndex) => {
+    if (typeof id !== "string" || !customCssById.has(id)) {
+      throw new Error(`${label}.customCssIds[${cssIndex}] must reference an existing custom CSS`);
+    }
+    return id;
+  });
+  if (new Set(selectedCssIds).size !== selectedCssIds.length) {
+    throw new Error(`${label}.customCssIds must not contain duplicates`);
+  }
   return {
     id,
     dashboardPath,
@@ -140,20 +202,24 @@ function taskFromDefinition(definition, index, shared) {
     waitForSelector: stringValue(definition.waitForSelector, `${label}.waitForSelector`, "home-assistant"),
     customCss: stringValue(definition.customCss, `${label}.customCss`, "", { allowEmpty: true }),
     customCssFile: stringValue(definition.customCssFile, `${label}.customCssFile`, "", { allowEmpty: true }),
+    customCssIds: selectedCssIds,
+    reusableCustomCss: selectedCssIds.map((id) => customCssById.get(id)),
     colorScheme,
     timezone: timezoneValue(definition.timezone, `${label}.timezone`),
     hideCursor: booleanValue(definition.hideCursor, `${label}.hideCursor`, true),
     disableAnimations: booleanValue(definition.disableAnimations, `${label}.disableAnimations`, true),
     outputFilename,
     outputPath: path.join(shared.outputDirectory, outputFilename),
+    imageProcessing: imageProcessingValue(definition.imageProcessing, label),
   };
 }
 
-export function normalizeTasks(definitions, shared) {
+export function normalizeTasks(definitions, shared, customCsses = []) {
   if (!Array.isArray(definitions) || definitions.length === 0) {
     throw new Error("tasks must be a non-empty array");
   }
-  const tasks = definitions.map((definition, index) => taskFromDefinition(definition, index, shared));
+  const customCssById = new Map(customCsses.map((entry) => [entry.id, entry.css]));
+  const tasks = definitions.map((definition, index) => taskFromDefinition(definition, index, shared, customCssById));
   const ids = new Set();
   const filenames = new Set();
   for (const task of tasks) {
@@ -255,9 +321,10 @@ export function normalizeConfiguration(definition, shared) {
     throw new Error("configuration file must contain an object");
   }
   const settings = normalizeSettings(definition.settings);
-  const tasks = normalizeTasks(definition.tasks, { ...shared, ...settings });
+  const customCsses = normalizeCustomCsses(definition.customCsses ?? []);
+  const tasks = normalizeTasks(definition.tasks, { ...shared, ...settings }, customCsses);
   const images = normalizeImages(definition.images ?? [], tasks);
-  return { ...settings, tasks, images };
+  return { ...settings, customCsses, tasks, images };
 }
 
 export function taskToDefinition(task) {
@@ -268,7 +335,8 @@ export function taskToDefinition(task) {
     zoom: task.zoom, format: task.format, jpegQuality: task.jpegQuality,
     navigationTimeoutMs: task.navigationTimeoutMs, waitForSelector: task.waitForSelector,
     customCss: task.customCss, customCssFile: task.customCssFile, hideCursor: task.hideCursor,
-    outputFilename: task.outputFilename,
+    customCssIds: [...task.customCssIds], outputFilename: task.outputFilename,
+    imageProcessing: { ...task.imageProcessing, palette: [...task.imageProcessing.palette] },
   };
 }
 
@@ -285,6 +353,7 @@ export function configurationToDefinition(configuration) {
       configUsername: configuration.configUsername,
       configPassword: configuration.configPassword,
     },
+    customCsses: (configuration.customCsses ?? []).map((entry) => ({ ...entry })),
     tasks: configuration.tasks.map(taskToDefinition),
     images: configuration.images.map(imageToDefinition),
   };
@@ -305,7 +374,7 @@ export function loadConfig(env = process.env) {
   const normalized = isEmptyBootstrap
     ? {
       haUrl: "", accessToken: "", imageScheduleTimezone: "UTC",
-      configUsername: "admin", configPassword: "", tasks: [], images: [], configured: false,
+      configUsername: "admin", configPassword: "", customCsses: [], tasks: [], images: [], configured: false,
     }
     : normalizeConfiguration(definition, shared);
   return { ...shared, ...normalized, configured: !isEmptyBootstrap };

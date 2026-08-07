@@ -42,7 +42,7 @@ test("creates and loads an empty bootstrap configuration when the file is missin
   assert.equal(config.configured, false);
   assert.deepEqual(config.tasks, []);
   assert.deepEqual(config.images, []);
-  assert.deepEqual(JSON.parse(fs.readFileSync(configFile, "utf8")), { settings: {}, tasks: [], images: [] });
+  assert.deepEqual(JSON.parse(fs.readFileSync(configFile, "utf8")), { settings: {}, customCsses: [], tasks: [], images: [] });
 
   const reloaded = loadConfig({ OUTPUT_DIRECTORY: outputDirectory });
   assert.deepEqual(reloaded.tasks, []);
@@ -63,6 +63,39 @@ test("loads task defaults and global schedule timezone", () => {
   assert.equal(config.tasks[0].height, 480);
   assert.equal(config.tasks[0].outputPath, path.join(env.OUTPUT_DIRECTORY, "display.png"));
   assert.equal(config.imageScheduleTimezone, "Asia/Bangkok");
+  assert.deepEqual(config.tasks[0].imageProcessing, {
+    mode: "color", palette: [], dither: "none", threshold: 128, invert: false, rotation: 0,
+  });
+});
+
+test("normalizes reusable custom CSS and ordered task references", () => {
+  const config = loadConfig(environment({
+    customCsses: [
+      { id: "base", css: "ha-card { border: 0; }" },
+      { id: "eink", css: "* { color: black; }" },
+    ],
+    tasks: [{
+      id: "display", customCssIds: ["base", "eink"], customCss: ".local { display: none; }",
+      imageProcessing: { mode: "monochrome", dither: "atkinson", threshold: 140, invert: true, rotation: 90 },
+    }],
+    images: [],
+  }));
+  assert.deepEqual(config.customCsses.map((entry) => entry.id), ["base", "eink"]);
+  assert.deepEqual(config.tasks[0].customCssIds, ["base", "eink"]);
+  assert.deepEqual(config.tasks[0].reusableCustomCss, ["ha-card { border: 0; }", "* { color: black; }"]);
+  assert.deepEqual(config.tasks[0].imageProcessing, {
+    mode: "monochrome", palette: [], dither: "atkinson", threshold: 140, invert: true, rotation: 90,
+  });
+});
+
+test("rejects invalid reusable CSS references and image processing", () => {
+  const configuration = (task, customCsses = []) => ({ customCsses, tasks: [{ id: "display", ...task }], images: [] });
+  assert.throws(() => loadConfig(environment(configuration({ customCssIds: ["missing"] }))), /existing custom CSS/);
+  assert.throws(() => loadConfig(environment(configuration({}, [{ id: "same", css: "a" }, { id: "same", css: "b" }]))), /Duplicate custom CSS/);
+  assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { mode: "sepia" } }))), /mode/);
+  assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { mode: "grayscale", dither: "atkinson" } }))), /requires monochrome/);
+  assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { rotation: 45 } }))), /rotation/);
+  assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { palette: ["#000000"] } }))), /not supported/);
 });
 
 test("normalizes scheduled images and overnight ranges", () => {

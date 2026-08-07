@@ -3,6 +3,7 @@
 .preview-card { min-height: 240px; object-fit: contain; background: var(--bs-tertiary-bg); }
 .url-text { max-width: 32rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .schedule-row .slot-task { min-width: 12rem; }
+.css-preview { display: block; max-width: 42rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty-state { padding: clamp(3rem, 8vw, 6rem) 1.5rem; }
 .empty-state p { max-width: 38rem; }
 .empty-state-icon { display: inline-grid; place-items: center; width: 3.5rem; height: 3.5rem; margin-bottom: 1.25rem; border-radius: 1rem; background: var(--bs-primary-bg-subtle); color: var(--bs-primary); font-size: 1.75rem; }

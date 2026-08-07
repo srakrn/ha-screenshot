@@ -21,7 +21,7 @@ Keep the service focused on one job: periodically produce a deterministic dashbo
 
 ## Development commands
 
-Use Node.js 20.6 or newer.
+Use Node.js 20.9 or newer.
 
 ```sh
 npm ci

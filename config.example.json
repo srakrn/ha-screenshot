@@ -6,6 +6,16 @@
     "configUsername": "admin",
     "configPassword": "change-this-editor-password"
   },
+  "customCsses": [
+    {
+      "id": "eink-cards",
+      "css": "ha-card { border: 0 !important; box-shadow: none !important; }"
+    },
+    {
+      "id": "compact-layout",
+      "css": ".card-content { padding: 8px !important; }"
+    }
+  ],
   "tasks": [
     {
       "id": "overview",
@@ -17,8 +27,18 @@
       "colorScheme": "light",
       "timezone": "Asia/Bangkok",
       "disableAnimations": true,
+      "customCssIds": ["eink-cards", "compact-layout"],
+      "customCss": ".task-only { display: none !important; }",
       "zoom": 1,
-      "format": "png"
+      "format": "png",
+      "imageProcessing": {
+        "mode": "monochrome",
+        "palette": [],
+        "dither": "atkinson",
+        "threshold": 128,
+        "invert": false,
+        "rotation": 0
+      }
     },
     {
       "id": "details",

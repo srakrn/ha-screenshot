@@ -62,6 +62,12 @@ The complete configuration is saved atomically and hot-applied by the web editor
     "configUsername": "admin",
     "configPassword": "change-this-editor-password"
   },
+  "customCsses": [
+    {
+      "id": "eink-cards",
+      "css": "ha-card { border: 0 !important; box-shadow: none !important; }"
+    }
+  ],
   "tasks": [
     {
       "id": "morning",
@@ -70,7 +76,17 @@ The complete configuration is saved atomically and hot-applied by the web editor
       "height": 480,
       "refreshIntervalSeconds": 300,
       "timezone": "Asia/Bangkok",
-      "format": "png"
+      "format": "png",
+      "customCssIds": ["eink-cards"],
+      "customCss": ".morning-only { display: none !important; }",
+      "imageProcessing": {
+        "mode": "monochrome",
+        "palette": [],
+        "dither": "atkinson",
+        "threshold": 128,
+        "invert": false,
+        "rotation": 0
+      }
     },
     {
       "id": "evening",
@@ -134,8 +150,15 @@ The **Schedule timezone** web setting controls weekly schedule selection globall
 | `waitForSelector` | `home-assistant` | Element required before capture |
 | `customCss` | empty | CSS injected into the page and open shadow roots |
 | `customCssFile` | empty | Path to an additional CSS file |
+| `customCssIds` | `[]` | Ordered IDs of reusable top-level `customCsses` to inject |
 | `hideCursor` | `true` | Hide the pointer |
 | `outputFilename` | derived | Filename under `OUTPUT_DIRECTORY` |
+| `imageProcessing.mode` | `color` | `color`, `grayscale`, or `monochrome` |
+| `imageProcessing.palette` | `[]` | Reserved; must remain empty until custom palettes are supported |
+| `imageProcessing.dither` | `none` | `none`, `floyd-steinberg`, or `atkinson`; non-`none` requires monochrome mode |
+| `imageProcessing.threshold` | `128` | Monochrome split point from `0` through `255`; values at the threshold become white |
+| `imageProcessing.invert` | `false` | Invert the processed RGB output |
+| `imageProcessing.rotation` | `0` | Clockwise rotation: `0`, `90`, `180`, or `270` degrees |
 
 ### Environment variables
 
@@ -160,7 +183,15 @@ The frontend loads pinned Bootstrap 5.3.8 assets from jsDelivr with Subresource 
 
 ## Custom CSS and Home Assistant security
 
-For substantial capture styling, place a file in the data volume and reference it as `/data/custom.css` in Docker (`./data/custom.css` with the example direct-run environment). CSS is copied into the document and currently open shadow roots. Home Assistant credentials are injected only into storage for the configured Home Assistant origin and never into embedded cross-origin frames, responses, URLs, or screenshots.
+Create named entries in the editor's **Custom CSS** tab when styling should be reused. A task may select one or many entries with `customCssIds`; they are composed in the stored list order. The task's optional CSS file is applied next and its inline `customCss` last, so task-specific rules can override shared rules.
+
+For a file-based style, place the file in the data volume and reference it as `/data/custom.css` in Docker (`./data/custom.css` with the example direct-run environment). All selected CSS is copied into the document and currently open shadow roots. Home Assistant credentials are injected only into storage for the configured Home Assistant origin and never into embedded cross-origin frames, responses, URLs, or screenshots.
+
+## Native eInk image processing
+
+Each task can transform its captured pixels before the last-good image is atomically replaced. Grayscale uses fixed luminance coefficients. Monochrome output supports a direct threshold plus deterministic Floyd–Steinberg or Atkinson error diffusion. Inversion is applied after color reduction, and rotation is applied last.
+
+`width` and `height` always describe the delivered image. For a 90° or 270° rotation, the service swaps the Chromium capture dimensions before rotating, so the final file still has the configured dimensions. Processing failures leave the previous successful image untouched. PNG is recommended for monochrome panels; JPEG remains available with the configured quality but can introduce compression artifacts around hard black-and-white edges.
 
 If Home Assistant runs on the Docker host, `localhost` inside the container is not the host. Docker Desktop users can use `host.docker.internal`. Linux users can add:
 
@@ -171,7 +202,7 @@ extra_hosts:
 
 ## Development and verification
 
-Node.js 20.6 or newer is required.
+Node.js 20.9 or newer is required.
 
 ```sh
 npm ci

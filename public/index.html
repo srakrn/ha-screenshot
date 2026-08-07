@@ -34,6 +34,7 @@
 
       <ul class="nav nav-tabs" role="tablist">
         <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tasks-pane" type="button">Capture tasks <span id="task-count" class="badge text-bg-secondary ms-1"></span></button></li>
+        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#css-pane" type="button">Custom CSS <span id="css-count" class="badge text-bg-secondary ms-1"></span></button></li>
         <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#images-pane" type="button">Image URLs <span id="image-count" class="badge text-bg-secondary ms-1"></span></button></li>
         <li class="nav-item"><button id="settings-tab" class="nav-link" data-bs-toggle="tab" data-bs-target="#settings-pane" type="button">Settings</button></li>
       </ul>
@@ -42,6 +43,11 @@
           <div class="d-flex justify-content-between align-items-center mb-3"><div><h2 class="h5 mb-1">Capture tasks</h2><p class="small text-body-secondary mb-0">Independent Chromium jobs and their direct public images.</p></div><button id="add-task" class="btn btn-primary btn-sm">Add task</button></div>
           <div id="tasks-table" class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Preview</th><th>Task</th><th>Status</th><th>Output</th><th>Refresh</th><th class="text-end">Actions</th></tr></thead><tbody id="tasks"></tbody></table></div>
           <div id="tasks-empty" class="empty-state text-center" hidden><div class="empty-state-icon" aria-hidden="true">▣</div><h3 class="h5">No capture tasks yet</h3><p class="text-body-secondary mb-3">Create a task to render your first Home Assistant dashboard image.</p><button id="empty-add-task" class="btn btn-primary btn-sm" type="button">Add first task</button></div>
+        </section>
+        <section id="css-pane" class="tab-pane fade p-3 p-lg-4" role="tabpanel">
+          <div class="d-flex justify-content-between align-items-center mb-3"><div><h2 class="h5 mb-1">Reusable custom CSS</h2><p class="small text-body-secondary mb-0">Create styles once, then apply one or many to each capture task.</p></div><button id="add-css" class="btn btn-primary btn-sm" type="button">Add custom CSS</button></div>
+          <div id="css-table" class="table-responsive"><table class="table table-hover align-middle mb-0"><thead><tr><th>Name</th><th>Used by</th><th>CSS</th><th class="text-end">Actions</th></tr></thead><tbody id="custom-csses"></tbody></table></div>
+          <div id="css-empty" class="text-center text-body-secondary py-5" hidden>No reusable custom CSS yet. Per-task inline CSS remains available.</div>
         </section>
         <section id="images-pane" class="tab-pane fade p-3 p-lg-4" role="tabpanel">
           <div class="d-flex justify-content-between align-items-center mb-3"><div><h2 class="h5 mb-1">Scheduled image URLs</h2><p class="small text-body-secondary mb-0">Stable URLs select from compatible task images without starting a capture.</p></div><button id="add-image" class="btn btn-primary btn-sm">Add image URL</button></div>
@@ -87,9 +93,25 @@
         <h3 class="h6 text-uppercase text-body-secondary">Capture timing</h3>
         <div class="row g-3 mb-4"><div class="col-md-4"><label class="form-label">Refresh interval (seconds)</label><input class="form-control" name="refreshIntervalSeconds" type="number" min="0" required></div><div class="col-md-4"><label class="form-label">Wait after load (ms)</label><input class="form-control" name="waitAfterLoadMs" type="number" min="0" required></div><div class="col-md-4"><label class="form-label">Navigation timeout (ms)</label><input class="form-control" name="navigationTimeoutMs" type="number" min="1000" required></div></div>
         <div class="accordion" id="advanced-task"><div class="accordion-item"><h3 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#advanced-task-body">Advanced rendering</button></h3><div id="advanced-task-body" class="accordion-collapse collapse" data-bs-parent="#advanced-task"><div class="accordion-body">
-          <div class="row g-3"><div class="col-md-6"><label class="form-label">Wait for selector</label><input class="form-control" name="waitForSelector"></div><div class="col-md-6"><label class="form-label">Custom CSS file</label><input class="form-control" name="customCssFile"></div><div class="col-12"><label class="form-label">Inline custom CSS</label><textarea class="form-control font-monospace" name="customCss" rows="5"></textarea></div><div class="col-12 d-flex gap-4"><div class="form-check form-switch"><input class="form-check-input" name="disableAnimations" type="checkbox" id="disableAnimations"><label class="form-check-label" for="disableAnimations">Disable animations</label></div><div class="form-check form-switch"><input class="form-check-input" name="hideCursor" type="checkbox" id="hideCursor"><label class="form-check-label" for="hideCursor">Hide cursor</label></div></div></div>
+          <div class="row g-3">
+            <div class="col-md-6"><label class="form-label">Wait for selector</label><input class="form-control" name="waitForSelector"></div><div class="col-md-6"><label class="form-label">Custom CSS file</label><input class="form-control" name="customCssFile"></div>
+            <div class="col-md-6"><label class="form-label">Reusable custom CSS</label><select class="form-select" name="customCssIds" multiple size="5"></select><div class="form-text">Selected styles are applied in the Custom CSS list order. The task's inline CSS is applied last.</div></div>
+            <div class="col-md-6"><label class="form-label">Inline custom CSS</label><textarea class="form-control font-monospace" name="customCss" rows="5"></textarea></div>
+            <div class="col-12"><hr><h4 class="h6">eInk image processing</h4></div>
+            <div class="col-md-3"><label class="form-label">Mode</label><select class="form-select" name="imageProcessingMode"><option value="color">Color</option><option value="grayscale">Grayscale</option><option value="monochrome">Monochrome</option></select></div>
+            <div class="col-md-3"><label class="form-label">Dithering</label><select class="form-select" name="imageProcessingDither"><option value="none">None</option><option value="floyd-steinberg">Floyd–Steinberg</option><option value="atkinson">Atkinson</option></select></div>
+            <div class="col-md-3"><label class="form-label">Threshold</label><input class="form-control" name="imageProcessingThreshold" type="number" min="0" max="255" required></div>
+            <div class="col-md-3"><label class="form-label">Rotation</label><select class="form-select" name="imageProcessingRotation"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select></div>
+            <div class="col-12 d-flex gap-4"><div class="form-check form-switch"><input class="form-check-input" name="disableAnimations" type="checkbox" id="disableAnimations"><label class="form-check-label" for="disableAnimations">Disable animations</label></div><div class="form-check form-switch"><input class="form-check-input" name="hideCursor" type="checkbox" id="hideCursor"><label class="form-check-label" for="hideCursor">Hide cursor</label></div><div class="form-check form-switch"><input class="form-check-input" name="imageProcessingInvert" type="checkbox" id="imageProcessingInvert"><label class="form-check-label" for="imageProcessingInvert">Invert output</label></div></div>
+          </div>
         </div></div></div></div>
       </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Apply to draft</button></div>
+    </form></div></div>
+
+    <div class="modal fade" id="css-modal" tabindex="-1" aria-labelledby="css-modal-title" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><form id="css-form" class="modal-content">
+      <div class="modal-header"><h2 id="css-modal-title" class="modal-title fs-5">Reusable custom CSS</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+      <div class="modal-body"><div id="css-error" class="alert alert-danger" hidden></div><div class="mb-3"><label class="form-label">CSS ID</label><input class="form-control" name="id" required pattern="[A-Za-z0-9_-]+"><div class="form-text">A stable name used by capture tasks.</div></div><div><label class="form-label">CSS</label><textarea class="form-control font-monospace" name="css" rows="14"></textarea></div></div>
+      <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary">Apply to draft</button></div>
     </form></div></div>
 
     <div class="modal fade" id="image-modal" tabindex="-1" aria-labelledby="image-modal-title" aria-hidden="true"><div class="modal-dialog modal-xl modal-dialog-scrollable"><form id="image-form" class="modal-content">

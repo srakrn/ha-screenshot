@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed implementation plan. This document does not describe shipped functionality.
+Implemented. The service ships deterministic grayscale and monochrome processing, Floyd–Steinberg and Atkinson dithering, inversion, and right-angle rotation. Custom palettes remain deferred.
 
 ## Goal
 
@@ -23,7 +23,7 @@ Add an `imageProcessing` task object with explicit defaults:
 }
 ```
 
-Initially support `color`, `grayscale`, and `monochrome`; rotations `0`, `90`, `180`, and `270`; and a small documented set of deterministic dithering algorithms. Custom palettes should be added only after exact color matching and output-format behavior are well tested.
+The shipped modes are `color`, `grayscale`, and `monochrome`; rotations are `0`, `90`, `180`, and `270`; and the deterministic dithering choices are `none`, `floyd-steinberg`, and `atkinson`. `palette` must currently remain empty. Custom palettes should be added only after exact color matching and output-format behavior are well tested.
 
 ## Implementation
 

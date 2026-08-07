@@ -38,6 +38,7 @@ async function httpFixture(t) {
   await fs.writeFile(morningTask.outputPath, "morning-image");
   await fs.writeFile(fallbackTask.outputPath, "fallback-image");
   const services = [new CaptureService({}, morningTask, silentLogger), new CaptureService({}, fallbackTask, silentLogger)];
+  const replacements = [];
   const image = { id: "display", fallbackTaskId: "fallback", slots: [{ days: ["mon"], start: "06:00", end: "09:00", taskId: "morning" }] };
   const manager = {
     services,
@@ -45,14 +46,14 @@ async function httpFixture(t) {
     getImage(id) { return id === image.id ? image : undefined; },
     resolveImage() { return services[0]; },
     configuration() { return { settings: { haUrl: "http://homeassistant.local:8123", accessToken: "secret", imageScheduleTimezone: "UTC", configUsername: "admin", configPassword: "editor-secret" }, tasks: services.map((service) => service.task), images: [image] }; },
-    async replace(value) { return value; },
+    async replace(value) { replacements.push(value); return value; },
     refresh(id) { return this.getService(id) ? Promise.resolve() : null; },
   };
   const config = { configured: true, configUsername: "admin", configPassword: "editor-secret", imageScheduleTimezone: "UTC", images: [image] };
   const server = createApp(manager, config, { now: () => new Date("2026-08-03T07:00:00Z") }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
-  return { base: `http://127.0.0.1:${server.address().port}`, morningTask };
+  return { base: `http://127.0.0.1:${server.address().port}`, morningTask, replacements };
 }
 
 test("serves direct and scheduled images without legacy aliases", async (t) => {
@@ -81,7 +82,7 @@ test("serves the authenticated gallery and public health metadata", async (t) =>
 });
 
 test("protects configuration reads and mutations", async (t) => {
-  const { base } = await httpFixture(t);
+  const { base, replacements } = await httpFixture(t);
   assert.equal((await fetch(`${base}/api/config`)).status, 401);
   const authorization = `Basic ${Buffer.from("admin:editor-secret").toString("base64")}`;
   const configResponse = await fetch(`${base}/api/config`, { headers: { authorization } });
@@ -92,6 +93,13 @@ test("protects configuration reads and mutations", async (t) => {
   assert.equal("accessToken" in configBody.settings, false);
   assert.equal("configPassword" in configBody.settings, false);
   assert.equal((await fetch(`${base}/api/config`, { method: "PUT", headers: { authorization, "content-type": "application/json" }, body: JSON.stringify({ tasks: [], images: [] }) })).status, 403);
+  const update = await fetch(`${base}/api/config`, {
+    method: "PUT",
+    headers: { authorization, "content-type": "application/json", "x-requested-with": "ha-screenshot" },
+    body: JSON.stringify({ customCsses: [{ id: "eink", css: "ha-card {}" }], tasks: [], images: [] }),
+  });
+  assert.equal(update.status, 200);
+  assert.deepEqual(replacements[0].customCsses, [{ id: "eink", css: "ha-card {}" }]);
   assert.equal((await fetch(`${base}/api/tasks/morning/capture`, { method: "POST", headers: { authorization } })).status, 403);
   assert.equal((await fetch(`${base}/api/tasks/morning/capture`, { method: "POST", headers: { authorization, "x-requested-with": "ha-screenshot" } })).status, 202);
 });

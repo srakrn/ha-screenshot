@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { chromium } from "playwright";
+import { captureDimensions, processImage } from "./image-processing.js";
 
-async function readCustomCss(task) {
+export async function readCustomCss(task) {
   const fileCss = task.customCssFile ? await fs.readFile(task.customCssFile, "utf8") : "";
   const stabilityCss = [
     task.hideCursor ? "* { cursor: none !important; }" : "",
@@ -10,7 +11,7 @@ async function readCustomCss(task) {
       ? "*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }"
       : "",
   ].filter(Boolean).join("\n");
-  return [stabilityCss, fileCss, task.customCss].filter(Boolean).join("\n");
+  return [stabilityCss, ...(task.reusableCustomCss ?? []), fileCss, task.customCss].filter(Boolean).join("\n");
 }
 
 async function injectCssIntoOpenShadowRoots(page, css) {
@@ -49,8 +50,9 @@ export class DashboardCapture {
 
   async capture(task) {
     if (!this.browser) throw new Error("Browser is not started");
+    const captureSize = captureDimensions(task);
     const context = await this.browser.newContext({
-      viewport: { width: task.width, height: task.height },
+      viewport: captureSize,
       deviceScaleFactor: 1,
       colorScheme: task.colorScheme,
       timezoneId: task.timezone,
@@ -85,22 +87,27 @@ export class DashboardCapture {
       await injectCssIntoOpenShadowRoots(page, await readCustomCss(task));
       await page.evaluate(() => document.fonts?.ready);
 
-      const temporaryPath = path.join(
+      const sourcePath = path.join(
         this.config.outputDirectory,
-        `.${task.outputFilename}.${process.pid}.tmp`,
+        `.${task.outputFilename}.${process.pid}.source.tmp`,
+      );
+      const processedPath = path.join(
+        this.config.outputDirectory,
+        `.${task.outputFilename}.${process.pid}.processed.tmp`,
       );
       const options = {
-        path: temporaryPath,
+        path: sourcePath,
         type: task.format,
         animations: task.disableAnimations ? "disabled" : "allow",
-        clip: { x: 0, y: 0, width: task.width, height: task.height },
+        clip: { x: 0, y: 0, width: captureSize.width, height: captureSize.height },
       };
       if (task.format === "jpeg") options.quality = task.jpegQuality;
       try {
         await page.screenshot(options);
-        await fs.rename(temporaryPath, task.outputPath);
+        await processImage(sourcePath, processedPath, task);
+        await fs.rename(processedPath, task.outputPath);
       } finally {
-        await fs.rm(temporaryPath, { force: true });
+        await Promise.all([fs.rm(sourcePath, { force: true }), fs.rm(processedPath, { force: true })]);
       }
       return { path: task.outputPath, capturedAt: new Date() };
     } finally {

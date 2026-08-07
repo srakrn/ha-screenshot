@@ -50,6 +50,7 @@ export class TaskManager {
       imageScheduleTimezone: this.config.imageScheduleTimezone,
       configUsername: this.config.configUsername,
       configPassword: this.config.configPassword,
+      customCsses: this.config.customCsses,
       tasks: this.services.map((service) => service.task),
       images: this.config.images,
     });
@@ -70,7 +71,11 @@ export class TaskManager {
       configUsername: suppliedSettings.configUsername ?? this.config.configUsername,
       configPassword: suppliedSettings.configPassword || this.config.configPassword,
     };
-    const normalized = normalizeConfiguration({ ...definition, settings }, this.config);
+    const normalized = normalizeConfiguration({
+      ...definition,
+      customCsses: definition?.customCsses ?? this.config.customCsses,
+      settings,
+    }, this.config);
     const persisted = configurationToDefinition(normalized);
     const serialized = `${JSON.stringify(persisted, null, 2)}\n`;
     const temporaryPath = path.join(
@@ -88,6 +93,7 @@ export class TaskManager {
     const connectionChanged = this.config.haUrl !== normalized.haUrl
       || this.config.accessToken !== normalized.accessToken;
     const tasksChanged = connectionChanged
+      || JSON.stringify(this.config.customCsses) !== JSON.stringify(persisted.customCsses)
       || JSON.stringify(this.definitions()) !== JSON.stringify(persisted.tasks);
     if (tasksChanged) {
       await this.stopServices();
@@ -99,6 +105,7 @@ export class TaskManager {
     this.config.imageScheduleTimezone = normalized.imageScheduleTimezone;
     this.config.configUsername = normalized.configUsername;
     this.config.configPassword = normalized.configPassword;
+    this.config.customCsses = normalized.customCsses;
     this.config.configured = true;
     this.config.images = normalized.images;
     if (tasksChanged) this.start();
