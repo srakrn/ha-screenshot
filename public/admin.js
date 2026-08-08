@@ -382,7 +382,6 @@ function openNewTask() {
   editingTask = -1; setTaskForm({ ...taskDefaults, id, outputFilename: `${id}.png` }); taskModal.show();
 }
 document.querySelector("#empty-add-task").addEventListener("click", openNewTask);
-document.querySelector("#setup-add-task").addEventListener("click", openNewTask);
 document.querySelector("#add-css").addEventListener("click", () => {
   editingCss = -1;
   cssForm.elements.id.value = uniqueId("custom-css", new Set(draft.customCsses.map((entry) => entry.id)));
@@ -486,7 +485,6 @@ function applyConfiguration(body) {
   if (settingsManagedExternally) {
     document.querySelector("#gallery-link").href = body.publicBaseUrl || `http://${window.location.hostname}:3000/`;
   }
-  document.querySelector("#setup-notice").hidden = !body.setupRequired;
   document.querySelector("#schedule-timezone").textContent = timezone;
   render(); markSaved();
 }
