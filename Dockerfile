@@ -4,8 +4,9 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 FROM mcr.microsoft.com/playwright:v1.62.0-noble
+ARG TARGETARCH=amd64
 ARG BUILD_VERSION="dev"
-ARG BUILD_ARCH="amd64"
+ARG BUILD_ARCH=$TARGETARCH
 LABEL io.hass.version="${BUILD_VERSION}" \
       io.hass.type="app" \
       io.hass.arch="${BUILD_ARCH}" \

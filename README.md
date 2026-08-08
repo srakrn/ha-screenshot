@@ -37,17 +37,18 @@ App mode keeps Supervisor options in `/data/options.json`, its task/feed documen
 
 The published App image is `ghcr.io/srakrn/ha-screenshot:<version>` for `amd64` and `aarch64`. Home Assistant Container installations do not include Supervisor and should use the Docker/Compose quick start above. See [the App documentation](home-assistant-app/DOCS.md) for setup and security details.
 
+Standalone releases are published to Docker Hub as `srakrn/ha-screenshot` for `amd64` and `arm64`. Publishing a GitHub release with a SemVer tag such as `v1.2.3` creates the `1.2.3`, `1.2`, `1`, and `latest` image tags. Prereleases do not update `latest`, and `0.x` releases do not publish the unstable `0` major alias.
+
 To show these images on Seeed Studio's ESPHome-based TRMNL 7.5-inch (OG) DIY Kit, including physical page navigation and a compact battery indicator, see the [ESPHome display guide](docs/esphome-trmnl-diy-kit.md).
 
 ### Portainer stack
 
 [`compose.portainer.yaml`](compose.portainer.yaml) is a Portainer-friendly stack example that uses a published container image. Before deploying it:
 
-1. Publish this repository's image to a registry that the Docker host can pull from.
-2. In Portainer's stack environment variables, set `HA_SCREENSHOT_IMAGE`. `PUBLISHED_PORT` and `IGNORE_HTTPS_ERRORS` are optional.
-3. Deploy the stack, open `/admin/`, and complete the first-run setup.
+1. In Portainer's stack environment variables, set `HA_SCREENSHOT_IMAGE`. `PUBLISHED_PORT` and `IGNORE_HTTPS_ERRORS` are optional.
+2. Deploy the stack, open `/admin/`, and complete the first-run setup.
 
-For example, `HA_SCREENSHOT_IMAGE` might be `ghcr.io/example/ha-screenshot:latest`. Configuration and captured images are stored together in the named data volume.
+For example, set `HA_SCREENSHOT_IMAGE` to `srakrn/ha-screenshot:latest` or pin a release such as `srakrn/ha-screenshot:1.2.3`. Configuration and captured images are stored together in the named data volume.
 
 If Portainer cannot pull a private image, add the registry and its credentials under **Registries** first. The stack publishes port `3000` by default; set `PUBLISHED_PORT` to change only the host-side port.
 
