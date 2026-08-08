@@ -11,11 +11,14 @@
   </head>
   <body class="bg-body-tertiary">
     <nav class="navbar navbar-expand-lg bg-dark navbar-dark shadow-sm">
-      <div class="container-fluid px-lg-4">
-        <a class="navbar-brand fw-semibold" href="./">HA Screenshot</a>
+      <div class="container-fluid px-lg-4 flex-wrap gap-2">
+        <span class="navbar-brand fw-semibold mb-0">HA Screenshot</span>
         <div class="d-flex align-items-center gap-2 ms-auto">
           <span id="save-state" class="small text-white-50 d-none d-sm-inline" role="status">All changes saved</span>
-          <a id="gallery-link" class="btn btn-outline-light btn-sm" href="/">Gallery</a>
+          <div class="btn-group" role="group" aria-label="Main navigation">
+            <a id="gallery-link" class="btn btn-outline-light btn-sm" href="/">Gallery</a>
+            <a class="btn btn-light btn-sm" href="./" aria-current="page">Admin</a>
+          </div>
           <button id="save-config" class="btn btn-success btn-sm" type="button">Save &amp; apply</button>
         </div>
       </div>

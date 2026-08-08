@@ -35,3 +35,16 @@ test("HTML pages reference only same-origin frontend assets", async () => {
     assert.ok(references.some((reference) => reference.includes("vendor/bootstrap/bootstrap.bundle.min.js")));
   }
 });
+
+test("gallery and admin pages use consistent explicit navigation", async () => {
+  const gallery = await fs.readFile(path.join(repositoryRoot, "public/gallery.html"), "utf8");
+  const admin = await fs.readFile(path.join(repositoryRoot, "public/index.html"), "utf8");
+
+  for (const html of [gallery, admin]) {
+    assert.match(html, /<span class="navbar-brand[^>]*">HA Screenshot<\/span>/);
+    assert.match(html, />Gallery<\/a>/);
+    assert.match(html, />Admin<\/a>/);
+  }
+  assert.match(gallery, /href="\/" aria-current="page">Gallery<\/a>/);
+  assert.match(admin, /href="\.\/" aria-current="page">Admin<\/a>/);
+});

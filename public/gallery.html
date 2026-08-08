@@ -10,7 +10,15 @@
     <script src="/gallery.js" defer></script>
   </head>
   <body class="bg-body-tertiary">
-    <nav class="navbar bg-dark navbar-dark shadow-sm"><div class="container-fluid px-lg-4"><span class="navbar-brand fw-semibold">HA Screenshot</span><a class="btn btn-outline-light btn-sm ms-auto" href="/admin/">Manage</a></div></nav>
+    <nav class="navbar bg-dark navbar-dark shadow-sm">
+      <div class="container-fluid px-lg-4">
+        <span class="navbar-brand fw-semibold mb-0">HA Screenshot</span>
+        <div class="btn-group ms-auto" role="group" aria-label="Main navigation">
+          <a class="btn btn-light btn-sm" href="/" aria-current="page">Gallery</a>
+          <a class="btn btn-outline-light btn-sm" href="/admin/">Admin</a>
+        </div>
+      </div>
+    </nav>
     <main class="container py-5">
       <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4"><div><h1 class="display-6 fw-semibold mb-1">Dashboard images</h1><p class="text-body-secondary mb-0">Stable scheduled feeds and their source captures.</p></div><div class="small text-body-secondary"><span id="summary" role="status">Loading…</span><br><span id="updated"></span></div></div>
       <div id="error" class="alert alert-danger" hidden></div>
