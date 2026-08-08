@@ -140,9 +140,12 @@ test("rejects incomplete connection and editor settings", () => {
   fs.writeFileSync(configFile, JSON.stringify(definition));
   assert.throws(() => loadConfig(env), /accessToken/);
   definition.settings.accessToken = "secret";
+  definition.settings.configPassword = "";
+  fs.writeFileSync(configFile, JSON.stringify(definition));
+  assert.throws(() => loadConfig(env), /non-empty string/);
   definition.settings.configPassword = "short";
   fs.writeFileSync(configFile, JSON.stringify(definition));
-  assert.throws(() => loadConfig(env), /12 characters/);
+  assert.equal(loadConfig(env).configPassword, "short");
 });
 
 test("rejects invalid feed references, time ranges, overlaps, and incompatible tasks", () => {

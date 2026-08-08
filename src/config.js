@@ -86,8 +86,8 @@ function normalizeSettings(definition) {
   try { haUrl = new URL(definition.haUrl); } catch { throw new Error("settings.haUrl must be a valid http or https URL"); }
   if (!["http:", "https:"].includes(haUrl.protocol)) throw new Error("settings.haUrl must use http or https");
   const configPassword = stringValue(definition.configPassword, "settings.configPassword", "");
-  if (configPassword.length < 12 || configPassword === "replace-with-a-strong-editor-password") {
-    throw new Error("settings.configPassword must be changed to at least 12 characters");
+  if (configPassword === "replace-with-a-strong-editor-password") {
+    throw new Error("settings.configPassword must be changed from the default value");
   }
   return {
     haUrl: haUrl.toString().replace(/\/$/, ""),

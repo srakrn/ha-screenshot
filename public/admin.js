@@ -480,7 +480,7 @@ function applyConfiguration(body) {
   settingsForm.elements.accessToken.required = !body.settings.accessTokenConfigured;
   settingsForm.elements.configPassword.required = !body.settings.configPasswordConfigured;
   settingsForm.elements.accessToken.placeholder = body.settings.accessTokenConfigured ? "Leave blank to keep the current token" : "Paste a long-lived access token";
-  settingsForm.elements.configPassword.placeholder = body.settings.configPasswordConfigured ? "Leave blank to keep the current password" : "At least 12 characters";
+  settingsForm.elements.configPassword.placeholder = body.settings.configPasswordConfigured ? "Leave blank to keep the current password" : "Enter a password";
   for (const field of settingsForm.elements) field.disabled = settingsManagedExternally;
   document.querySelector("#settings-tab").hidden = settingsManagedExternally;
   if (settingsManagedExternally) {
