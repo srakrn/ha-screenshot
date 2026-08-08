@@ -12,6 +12,8 @@ const taskModal = new bootstrap.Modal("#task-modal");
 const cssModal = new bootstrap.Modal("#css-modal");
 const imageModal = new bootstrap.Modal("#image-modal");
 const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+const adminRoot = new URL("./", document.baseURI);
+const adminUrl = (relativePath) => new URL(relativePath, adminRoot);
 const dayIndex = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 let draft = { settings: {}, customCsses: [], tasks: [], images: [] };
 let timezone = "UTC";
@@ -19,6 +21,7 @@ let dirty = false;
 let editingTask = -1;
 let editingCss = -1;
 let editingImage = -1;
+let settingsManagedExternally = false;
 
 const taskDefaults = {
   id: "new-task", dashboardPath: "/lovelace/0", width: 800, height: 480,
@@ -115,6 +118,12 @@ function actionButton(label, action, id, style = "outline-secondary") {
   return button;
 }
 
+function publicImageUrl(item, fallback) {
+  const value = item.publicUrl || fallback;
+  if (!settingsManagedExternally || /^https?:\/\//.test(value)) return value;
+  return `http://${window.location.hostname}:3000${value}`;
+}
+
 function renderTasks() {
   tasksBody.replaceChildren();
   for (const task of draft.tasks) {
@@ -123,7 +132,7 @@ function renderTasks() {
     previewCell.append(preview(task.imageUrl || `/screenshots/${task.id}`, task.status?.imageAvailable, `${task.id} screenshot`));
     const name = row.insertCell();
     const strong = document.createElement("strong"); strong.textContent = task.id;
-    name.append(strong, document.createElement("br"), link(task.imageUrl || `/screenshots/${task.id}`));
+    name.append(strong, document.createElement("br"), link(publicImageUrl(task, `/screenshots/${task.id}`)));
     row.insertCell().append(badge(task.status));
     const output = row.insertCell(); output.textContent = `${task.width} × ${task.height} · ${task.format.toUpperCase()}`;
     row.insertCell().textContent = intervalLabel(task.refreshIntervalSeconds);
@@ -152,7 +161,7 @@ function renderImages() {
     const row = document.createElement("tr");
     row.insertCell().append(preview(item.imageUrl || `/images/${item.id}`, item.status?.imageAvailable, `${item.id} scheduled image`));
     const name = row.insertCell(); const strong = document.createElement("strong"); strong.textContent = item.id;
-    name.append(strong, document.createElement("br"), link(item.imageUrl || `/images/${item.id}`));
+    name.append(strong, document.createElement("br"), link(publicImageUrl(item, `/images/${item.id}`)));
     const activeCell = row.insertCell(); activeCell.textContent = item.activeTaskId || item.fallbackTaskId; activeCell.append(document.createTextNode(" "), badge(item.status));
     row.insertCell().textContent = item.fallbackTaskId;
     const schedule = row.insertCell(); schedule.textContent = `${slotSummary(item)} · ${active?.width || fallback?.width}×${active?.height || fallback?.height} ${active?.format?.toUpperCase() || ""}`;
@@ -334,7 +343,7 @@ tasksBody.addEventListener("click", async (event) => {
     if (dirty) return showNotice("Save your changes before starting a capture.");
     button.disabled = true;
     try {
-      const response = await fetch(`/api/tasks/${encodeURIComponent(button.dataset.id)}/capture`, { method: "POST", headers: { "X-Requested-With": "ha-screenshot" } });
+      const response = await fetch(adminUrl(`api/tasks/${encodeURIComponent(button.dataset.id)}/capture`), { method: "POST", headers: { "X-Requested-With": "ha-screenshot" } });
       const body = await response.json(); if (!response.ok) throw new Error(body.error || "Capture could not be started");
       showNotice(`Capture started for ${button.dataset.id}.`, "success"); setTimeout(loadConfiguration, 1200);
     } catch (error) { showNotice(error.message); } finally { button.disabled = false; }
@@ -451,7 +460,7 @@ imageForm.addEventListener("submit", (event) => {
 
 async function loadConfiguration() {
   try {
-    const response = await fetch("/api/config", { cache: "no-store" });
+    const response = await fetch(adminUrl("api/config"), { cache: "no-store" });
     if (!response.ok) throw new Error("Could not load configuration");
     const body = await response.json();
     applyConfiguration(body);
@@ -460,6 +469,7 @@ async function loadConfiguration() {
 }
 
 function applyConfiguration(body) {
+  settingsManagedExternally = Boolean(body.settingsManagedExternally);
   timezone = body.settings.imageScheduleTimezone;
   draft = { settings: body.settings, customCsses: body.customCsses || [], tasks: body.tasks, images: body.images };
   settingsForm.elements.haUrl.value = body.settings.haUrl || "";
@@ -471,6 +481,11 @@ function applyConfiguration(body) {
   settingsForm.elements.configPassword.required = !body.settings.configPasswordConfigured;
   settingsForm.elements.accessToken.placeholder = body.settings.accessTokenConfigured ? "Leave blank to keep the current token" : "Paste a long-lived access token";
   settingsForm.elements.configPassword.placeholder = body.settings.configPasswordConfigured ? "Leave blank to keep the current password" : "At least 12 characters";
+  for (const field of settingsForm.elements) field.disabled = settingsManagedExternally;
+  document.querySelector("#settings-tab").hidden = settingsManagedExternally;
+  if (settingsManagedExternally) {
+    document.querySelector("#gallery-link").href = body.publicBaseUrl || `http://${window.location.hostname}:3000/`;
+  }
   document.querySelector("#setup-notice").hidden = !body.setupRequired;
   document.querySelector("#schedule-timezone").textContent = timezone;
   render(); markSaved();
@@ -491,14 +506,15 @@ saveButton.addEventListener("click", async () => {
     };
     const credentialsChanged = Boolean(settings.configPassword)
       || settings.configUsername !== draft.settings.configUsername;
-    const tasks = draft.tasks.map(({ status, imageUrl, ...task }) => task);
+    if (draft.tasks.length === 0) throw new Error("Add at least one capture task before saving.");
+    const tasks = draft.tasks.map(({ status, imageUrl, publicUrl, ...task }) => task);
     const customCsses = draft.customCsses.map((entry) => ({ ...entry }));
-    const images = draft.images.map(({ status, imageUrl, activeTaskId, width, height, format, ...image }) => image);
-    const response = await fetch("/api/config", { method: "PUT", headers: { "Content-Type": "application/json", "X-Requested-With": "ha-screenshot" }, body: JSON.stringify({ settings, customCsses, tasks, images }) });
+    const images = draft.images.map(({ status, imageUrl, publicUrl, activeTaskId, width, height, format, ...image }) => image);
+    const response = await fetch(adminUrl("api/config"), { method: "PUT", headers: { "Content-Type": "application/json", "X-Requested-With": "ha-screenshot" }, body: JSON.stringify({ settings, customCsses, tasks, images }) });
     const body = await response.json(); if (!response.ok) throw new Error(body.error || "Configuration could not be saved");
     applyConfiguration(body);
     if (credentialsChanged) {
-      window.location.assign("/admin/");
+      window.location.assign("./");
       return;
     }
     showNotice("Configuration saved and applied.", "success");

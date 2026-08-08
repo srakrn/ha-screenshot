@@ -1,6 +1,6 @@
 # Home Assistant dashboard image service
 
-A Dockerized Chromium service that periodically captures Home Assistant dashboards and serves them as unauthenticated images for eInk displays and other polling clients. Capture tasks are independent from scheduled image feeds, so one stable URL can show different dashboard captures throughout the week without creating Chromium work on request.
+A Chromium service that periodically captures Home Assistant dashboards and serves them as unauthenticated images for eInk displays and other polling clients. The same image runs as a normal Docker container or as a Supervisor-managed Home Assistant App. Capture tasks are independent from scheduled image feeds, so one stable URL can show different dashboard captures throughout the week without creating Chromium work on request.
 
 ## Quick start
 
@@ -17,7 +17,7 @@ A Dockerized Chromium service that periodically captures Home Assistant dashboar
    docker compose up -d --build
    ```
 
-4. Open `/admin/`, enter the Home Assistant connection and editor credentials in **Settings**, then save. Capture tasks can be added now or later. The first-run editor is open only until this initial configuration is saved.
+4. Open `/admin/`, enter the Home Assistant connection and editor credentials in **Settings**, add at least one capture task, then save. The first-run editor is open only until this initial configuration is saved.
 5. Open `/` and sign in with the same editor credentials to view the gallery.
 
 The canonical public routes are:
@@ -28,6 +28,14 @@ The canonical public routes are:
 ```
 
 Both routes require caches to revalidate on every request and support `ETag`, `Last-Modified`, conditional `GET`, and `HEAD`. An unchanged conditional request returns HTTP 304 without transferring the image again. They return HTTP 503 until the selected task has produced its first successful image. Scheduled image requests only select an existing capture file; they never trigger Chromium.
+
+## Home Assistant App
+
+Home Assistant OS and other Supervisor-managed installations can add this Git repository as a custom App repository, install **Home Assistant Screenshot**, and configure its Long-Lived Access Token from the App configuration page. The administration UI is available only through authenticated Supervisor ingress. Port 3000 remains a direct, unauthenticated LAN listener for display clients.
+
+App mode keeps Supervisor options in `/data/options.json`, its task/feed document in `/data/config.json`, and captures in `/data/images/`. The token is read into memory from Supervisor options and is not copied into the task document. At least one explicit task must be saved through the ingress editor before Chromium starts.
+
+The published App image is `ghcr.io/srakrn/ha-screenshot:<version>` for `amd64` and `aarch64`. Home Assistant Container installations do not include Supervisor and should use the Docker/Compose quick start above. See [the App documentation](home-assistant-app/DOCS.md) for setup and security details.
 
 To show these images on Seeed Studio's ESPHome-based TRMNL 7.5-inch (OG) DIY Kit, including physical page navigation and a compact battery indicator, see the [ESPHome display guide](docs/esphome-trmnl-diy-kit.md).
 
@@ -116,7 +124,7 @@ The complete configuration is saved atomically and hot-applied by the web editor
 }
 ```
 
-If `OUTPUT_DIRECTORY/config.json` does not exist at startup, the service creates a private empty bootstrap configuration. The gallery shows a focused setup prompt and the editor remains unauthenticated until the first valid configuration is saved. That first save requires complete service settings; `tasks` and `images` may be empty. Changes are fully validated before the file or running configuration is replaced. Schedule-only changes preserve running capture services and their current status.
+If `OUTPUT_DIRECTORY/config.json` does not exist at standalone startup, the service creates a private empty bootstrap configuration. The gallery shows a focused setup prompt and the editor remains unauthenticated until the first valid configuration is saved. That first save requires complete service settings and at least one explicit task. Changes are fully validated before the file or running configuration is replaced. Schedule-only changes preserve running capture services and their current status.
 
 ### Scheduled image feeds
 
@@ -166,6 +174,7 @@ The **Schedule timezone** web setting controls weekly schedule selection globall
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
+| `RUNTIME_MODE` | `standalone` | Runtime adapter; Compose and direct Docker deployments must keep `standalone` |
 | `OUTPUT_DIRECTORY` | `/data` | Persistent capture directory |
 | `IGNORE_HTTPS_ERRORS` | `false` | Accept invalid/self-signed Home Assistant TLS certificates |
 | `PORT` | `3000` | HTTP listen port |
@@ -182,7 +191,7 @@ All other service settings are managed through `/admin/`. The service itself lis
 
 The gallery and editor pages share the same HTTP Basic authentication after setup. Public image, gallery-metadata, and health routes remain unauthenticated so display clients can poll without credentials. Before initial setup, both pages are open so credentials can be created. Keep port 3000 on a trusted network during setup and add network-level access control or an HTTPS reverse proxy when exposing it outside a trusted LAN. HTTP Basic credentials are encoded, not encrypted.
 
-The frontend loads pinned Bootstrap 5.3.8 assets from jsDelivr with Subresource Integrity. Browsers need access to that CDN for the styled admin and gallery interfaces; image endpoints do not depend on the CDN.
+The container bundles pinned Bootstrap 5.3.8 assets, so the gallery and administration UI have no runtime CDN dependency.
 
 ## Custom CSS and Home Assistant security
 

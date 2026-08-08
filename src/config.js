@@ -58,18 +58,19 @@ function timezoneValue(raw, name, fallback = "UTC") {
   return value;
 }
 
-function loadDefinition(configFile) {
+function loadDefinition(configFile, { createBootstrap = true } = {}) {
   const configDirectory = path.dirname(configFile);
   try {
     fs.mkdirSync(configDirectory, { recursive: true });
     fs.accessSync(configDirectory, fs.constants.W_OK);
-    if (!fs.existsSync(configFile)) {
+    if (!fs.existsSync(configFile) && createBootstrap) {
       fs.writeFileSync(configFile, `${JSON.stringify({ settings: {}, customCsses: [], tasks: [], images: [] }, null, 2)}\n`, {
         encoding: "utf8",
         flag: "wx",
         mode: 0o600,
       });
     }
+    if (!fs.existsSync(configFile)) return null;
     fs.accessSync(configFile, fs.constants.R_OK | fs.constants.W_OK);
   } catch {
     throw new Error("OUTPUT_DIRECTORY and its configuration file must be readable and writable");
@@ -315,13 +316,14 @@ export function normalizeImages(definitions = [], tasks) {
   });
 }
 
-export function normalizeConfiguration(definition, shared) {
+export function normalizeConfiguration(definition, shared, { settings: managedSettings } = {}) {
   if (!definition || typeof definition !== "object" || Array.isArray(definition)) {
     throw new Error("configuration file must contain an object");
   }
-  const settings = normalizeSettings(definition.settings);
+  const settings = normalizeSettings(managedSettings ?? definition.settings);
   const customCsses = normalizeCustomCsses(definition.customCsses ?? []);
   const tasks = normalizeTasks(definition.tasks, { ...shared, ...settings }, customCsses);
+  if (tasks.length === 0) throw new Error("At least one screenshot task is required");
   const images = normalizeImages(definition.images ?? [], tasks);
   return { ...settings, customCsses, tasks, images };
 }
@@ -344,38 +346,52 @@ export function imageToDefinition(image) {
   return { id: image.id, fallbackTaskId: image.fallbackTaskId, slots: image.slots.map((slot) => ({ ...slot, days: [...slot.days] })) };
 }
 
-export function configurationToDefinition(configuration) {
+export function configurationToDefinition(configuration, { includeSettings = true } = {}) {
   return {
-    settings: {
+    ...(includeSettings ? { settings: {
       haUrl: configuration.haUrl,
       accessToken: configuration.accessToken,
       imageScheduleTimezone: configuration.imageScheduleTimezone,
       configUsername: configuration.configUsername,
       configPassword: configuration.configPassword,
-    },
+    } } : {}),
     customCsses: (configuration.customCsses ?? []).map((entry) => ({ ...entry })),
     tasks: configuration.tasks.map(taskToDefinition),
     images: configuration.images.map(imageToDefinition),
   };
 }
 
-export function loadConfig(env = process.env) {
-  const outputDirectory = path.resolve(env.OUTPUT_DIRECTORY || "/data");
-  const shared = {
-    outputDirectory,
-    port: integerValue(env.PORT, "PORT", 3000, { min: 1, max: 65535 }),
-    ignoreHttpsErrors: booleanValue(env.IGNORE_HTTPS_ERRORS, "IGNORE_HTTPS_ERRORS", false),
-    configFile: path.join(outputDirectory, "config.json"),
-  };
-  const definition = loadDefinition(shared.configFile);
-  const isEmptyBootstrap = Array.isArray(definition?.tasks) && definition.tasks.length === 0
+export function loadConfig(runtimeOrEnv = process.env) {
+  const isRuntime = runtimeOrEnv?.runtimeMode === "standalone" || runtimeOrEnv?.runtimeMode === "home_assistant_app";
+  const runtime = isRuntime ? runtimeOrEnv : (() => {
+    const outputDirectory = path.resolve(runtimeOrEnv.OUTPUT_DIRECTORY || "/data");
+    return {
+      runtimeMode: "standalone", outputDirectory,
+      port: integerValue(runtimeOrEnv.PORT, "PORT", 3000, { min: 1, max: 65535 }),
+      adminPort: null,
+      ignoreHttpsErrors: booleanValue(runtimeOrEnv.IGNORE_HTTPS_ERRORS, "IGNORE_HTTPS_ERRORS", false),
+      configFile: path.join(outputDirectory, "config.json"), settingsManagedExternally: false, publicBaseUrl: "",
+    };
+  })();
+  fs.mkdirSync(runtime.outputDirectory, { recursive: true });
+  const definition = loadDefinition(runtime.configFile, { createBootstrap: runtime.runtimeMode === "standalone" });
+  const isEmptyBootstrap = definition === null || (Array.isArray(definition?.tasks) && definition.tasks.length === 0
     && Array.isArray(definition.images) && definition.images.length === 0
-    && (!definition.settings || Object.keys(definition.settings).length === 0);
+    && (!definition.settings || Object.keys(definition.settings).length === 0));
+  const managedSettings = runtime.settingsManagedExternally ? {
+    haUrl: runtime.haUrl,
+    accessToken: runtime.accessToken,
+    imageScheduleTimezone: runtime.imageScheduleTimezone,
+    configUsername: "ingress",
+    configPassword: "managed-by-supervisor",
+  } : undefined;
   const normalized = isEmptyBootstrap
     ? {
-      haUrl: "", accessToken: "", imageScheduleTimezone: "UTC",
-      configUsername: "admin", configPassword: "", customCsses: [], tasks: [], images: [], configured: false,
+      haUrl: managedSettings?.haUrl ?? "", accessToken: managedSettings?.accessToken ?? "",
+      imageScheduleTimezone: managedSettings?.imageScheduleTimezone ?? "UTC",
+      configUsername: managedSettings?.configUsername ?? "admin", configPassword: managedSettings?.configPassword ?? "",
+      customCsses: [], tasks: [], images: [], configured: false,
     }
-    : normalizeConfiguration(definition, shared);
-  return { ...shared, ...normalized, configured: !isEmptyBootstrap };
+    : normalizeConfiguration(definition, runtime, { settings: managedSettings });
+  return { ...runtime, ...normalized, configured: !isEmptyBootstrap };
 }

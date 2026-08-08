@@ -1,0 +1,21 @@
+configuration:
+  ha_url:
+    name: Home Assistant URL
+    description: Internal HTTP or HTTPS URL used to render the Home Assistant frontend.
+  ha_access_token:
+    name: Long-lived access token
+    description: Token for a dedicated, non-admin Home Assistant user.
+  image_schedule_timezone:
+    name: Image schedule timezone
+    description: IANA timezone used to select scheduled image feeds.
+  ignore_https_errors:
+    name: Ignore HTTPS errors
+    description: Allow self-signed or otherwise invalid Home Assistant TLS certificates.
+  public_base_url:
+    name: Public base URL
+    description: Optional LAN URL shown when copying public screenshot links.
+  log_level:
+    name: Log level
+    description: Minimum application log level.
+network:
+  3000/tcp: Unauthenticated screenshot and gallery server

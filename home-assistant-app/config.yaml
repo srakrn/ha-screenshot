@@ -1,0 +1,40 @@
+name: Home Assistant Screenshot
+version: "1.0.0"
+slug: ha_screenshot
+description: Periodically render Home Assistant dashboards and expose stable image URLs.
+url: https://github.com/srakrn/ha-screenshot
+image: ghcr.io/srakrn/ha-screenshot
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+init: true
+ingress: true
+ingress_port: 8099
+ingress_entry: /admin/
+panel_icon: mdi:monitor-screenshot
+panel_title: Screenshots
+panel_admin: true
+ports:
+  3000/tcp: 3000
+ports_description:
+  3000/tcp: Unauthenticated screenshot and gallery server
+watchdog: http://[HOST]:[PORT:3000]/livez
+backup: hot
+environment:
+  RUNTIME_MODE: home_assistant_app
+options:
+  ha_url: http://homeassistant:8123
+  ha_access_token: null
+  image_schedule_timezone: UTC
+  ignore_https_errors: false
+  public_base_url: ""
+  log_level: info
+schema:
+  ha_url: url
+  ha_access_token: password
+  image_schedule_timezone: str
+  ignore_https_errors: bool
+  public_base_url: str?
+  log_level: list(trace|debug|info|notice|warning|error|fatal)

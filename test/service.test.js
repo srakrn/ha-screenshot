@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import sharp from "sharp";
-import { CaptureService, createApp } from "../src/service.js";
+import { CaptureService, createAdminApp, createApp, createPublicApp } from "../src/service.js";
 
 const task = { id: "test", width: 800, height: 480, refreshIntervalSeconds: 0, maximumImageAgeSeconds: 0, outputPath: "/tmp/not-created-ha-screenshot.png", outputFilename: "test.png", format: "png" };
 const silentLogger = { info() {}, error() {} };
@@ -195,8 +195,9 @@ test("serves the authenticated gallery and public health metadata", async (t) =>
   assert.equal((await fetch(`${base}/`)).status, 401);
   const authorization = `Basic ${Buffer.from("admin:editor-secret").toString("base64")}`;
   const pageResponse = await fetch(`${base}/`, { headers: { authorization } }); const page = await pageResponse.text();
-  assert.match(pageResponse.headers.get("content-security-policy"), /https:\/\/cdn\.jsdelivr\.net/);
-  assert.match(page, /bootstrap@5\.3\.8/); assert.match(page, /integrity="sha384-/);
+  assert.doesNotMatch(pageResponse.headers.get("content-security-policy"), /cdn\.jsdelivr\.net/);
+  assert.match(page, /vendor\/bootstrap\.min\.css/);
+  assert.equal((await fetch(`${base}/vendor/bootstrap.min.css`)).status, 200);
   const galleryResponse = await fetch(`${base}/api/gallery`); const gallery = await galleryResponse.json();
   assert.equal(galleryResponse.status, 200); assert.equal(gallery.images[0].activeTaskId, "morning"); assert.equal(gallery.tasks[0].imageUrl, "/screenshots/morning");
   const healthResponse = await fetch(`${base}/healthz`); const health = await healthResponse.json();
@@ -252,6 +253,50 @@ test("allows first-run setup without editor credentials", async (t) => {
   assert.equal(api.status, 200);
   assert.equal((await api.json()).setupRequired, true);
   assert.equal(gallery.setupRequired, true);
+  assert.equal((await fetch(`${base}/livez`)).status, 200);
+  const readiness = await fetch(`${base}/healthz`);
+  assert.equal(readiness.status, 503);
+  assert.deepEqual(await readiness.json(), { status: "configuration_required" });
+});
+
+test("separates App public and ingress administration routes", async (t) => {
+  const manager = {
+    services: [],
+    configuration() {
+      return {
+        settings: { haUrl: "http://homeassistant:8123", accessToken: "secret", imageScheduleTimezone: "UTC", configUsername: "ingress", configPassword: "managed-by-supervisor" },
+        customCsses: [], tasks: [], images: [],
+      };
+    },
+  };
+  const config = { configured: false, settingsManagedExternally: true, imageScheduleTimezone: "UTC", images: [], publicBaseUrl: "" };
+  const publicServer = createPublicApp(manager, config).listen(0, "127.0.0.1");
+  const adminServer = createAdminApp(manager, config).listen(0, "127.0.0.1");
+  await Promise.all([
+    new Promise((resolve) => publicServer.once("listening", resolve)),
+    new Promise((resolve) => adminServer.once("listening", resolve)),
+  ]);
+  t.after(() => Promise.all([
+    new Promise((resolve) => publicServer.close(resolve)),
+    new Promise((resolve) => adminServer.close(resolve)),
+  ]));
+  const publicBase = `http://127.0.0.1:${publicServer.address().port}`;
+  const adminBase = `http://127.0.0.1:${adminServer.address().port}`;
+
+  assert.equal((await fetch(`${publicBase}/api/config`)).status, 404);
+  assert.equal((await fetch(`${publicBase}/admin/`)).status, 404);
+  assert.equal((await fetch(`${adminBase}/admin/`)).status, 401);
+  assert.equal((await fetch(`${adminBase}/admin/vendor/bootstrap.min.css`)).status, 401);
+  const headers = { "x-remote-user-id": "home-assistant-user" };
+  const pageResponse = await fetch(`${adminBase}/admin/`, { headers });
+  const page = await pageResponse.text();
+  assert.equal(pageResponse.status, 200);
+  assert.match(pageResponse.headers.get("content-security-policy"), /frame-ancestors 'self'/);
+  assert.equal(pageResponse.headers.get("x-frame-options"), null);
+  assert.match(page, /href="app\.css"/);
+  assert.equal((await fetch(`${adminBase}/admin/vendor/bootstrap.min.css`, { headers })).status, 200);
+  assert.equal((await fetch(`${adminBase}/admin/api/config`, { headers })).status, 200);
+  assert.equal((await fetch(`${adminBase}/api/config`, { headers })).status, 404);
 });
 
 test("returns 503 without replacing or exposing a missing image", async (t) => {

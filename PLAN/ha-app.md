@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed implementation plan. This document does not describe functionality that has already shipped.
+Implemented in the repository on 2026-08-08. Unit, HTTP, configuration, and Compose validation are covered locally. Publishing the first signed image and validating Chromium plus the AppArmor profile on real amd64 and aarch64 Home Assistant OS hosts remain release checks.
 
 Home Assistant now calls add-ons **Apps**. In this plan, “App mode” means execution under Home Assistant Supervisor, while “container mode” means the existing Docker/Compose or direct Node.js deployment.
 

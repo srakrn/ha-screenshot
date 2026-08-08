@@ -5,10 +5,11 @@ import { CaptureService } from "./service.js";
 import { resolveImageTaskId } from "./schedule.js";
 
 export class TaskManager {
-  constructor(capture, config, logger = console) {
+  constructor(capture, config, logger = console, { activateCapture = async () => {} } = {}) {
     this.capture = capture;
     this.config = config;
     this.logger = logger;
+    this.activateCapture = activateCapture;
     this.services = config.tasks.map((task) => new CaptureService(capture, task, logger));
     this.updateQueue = Promise.resolve();
   }
@@ -53,7 +54,7 @@ export class TaskManager {
       customCsses: this.config.customCsses,
       tasks: this.services.map((service) => service.task),
       images: this.config.images,
-    });
+    }, { includeSettings: true });
   }
 
   replace(definition) {
@@ -64,7 +65,13 @@ export class TaskManager {
 
   async replaceNow(definition) {
     const suppliedSettings = definition?.settings || {};
-    const settings = {
+    const settings = this.config.settingsManagedExternally ? {
+      haUrl: this.config.haUrl,
+      accessToken: this.config.accessToken,
+      imageScheduleTimezone: this.config.imageScheduleTimezone,
+      configUsername: this.config.configUsername,
+      configPassword: this.config.configPassword,
+    } : {
       haUrl: suppliedSettings.haUrl ?? this.config.haUrl,
       accessToken: suppliedSettings.accessToken || this.config.accessToken,
       imageScheduleTimezone: suppliedSettings.imageScheduleTimezone ?? this.config.imageScheduleTimezone,
@@ -76,13 +83,14 @@ export class TaskManager {
       customCsses: definition?.customCsses ?? this.config.customCsses,
       settings,
     }, this.config);
-    const persisted = configurationToDefinition(normalized);
+    const persisted = configurationToDefinition(normalized, { includeSettings: !this.config.settingsManagedExternally });
     const serialized = `${JSON.stringify(persisted, null, 2)}\n`;
     const temporaryPath = path.join(
       path.dirname(this.config.configFile),
       `.${path.basename(this.config.configFile)}.${process.pid}.tmp`,
     );
 
+    if (!this.config.configured) await this.activateCapture();
     await fs.writeFile(temporaryPath, serialized, { encoding: "utf8", mode: 0o600 });
     try {
       await fs.rename(temporaryPath, this.config.configFile);

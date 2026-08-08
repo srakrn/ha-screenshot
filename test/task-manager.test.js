@@ -84,7 +84,7 @@ test("persists web settings while preserving omitted secrets", async (t) => {
   assert.equal(manager.services[0].task.dashboardUrl, "https://homeassistant.example.test/lovelace/0");
 });
 
-test("persists first-run settings without capture tasks", async (t) => {
+test("rejects first-run settings without a capture task", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ha-screenshot-manager-bootstrap-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   const config = {
@@ -101,8 +101,11 @@ test("persists first-run settings without capture tasks", async (t) => {
     images: [],
   };
   await fs.writeFile(config.configFile, JSON.stringify({ settings: {}, customCsses: [], tasks: [], images: [] }));
-  const manager = new TaskManager({ async capture() { return { capturedAt: new Date() }; } }, config, silentLogger);
-  await manager.replace({
+  let activated = false;
+  const manager = new TaskManager({ async capture() { return { capturedAt: new Date() }; } }, config, silentLogger, {
+    activateCapture: async () => { activated = true; },
+  });
+  await assert.rejects(manager.replace({
     settings: {
       haUrl: "http://homeassistant.local:8123",
       accessToken: "secret",
@@ -112,13 +115,48 @@ test("persists first-run settings without capture tasks", async (t) => {
     },
     tasks: [],
     images: [],
-  });
+  }), /At least one screenshot task/);
   assert.deepEqual(manager.services, []);
-  assert.equal(config.configured, true);
-  assert.equal(config.imageScheduleTimezone, "Asia/Bangkok");
+  assert.equal(config.configured, false);
+  assert.equal(activated, false);
   const saved = JSON.parse(await fs.readFile(config.configFile, "utf8"));
   assert.deepEqual(saved.tasks, []);
-  assert.deepEqual(saved.images, []);
+});
+
+test("activates an App first-run task without persisting Supervisor options", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ha-screenshot-manager-app-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const config = {
+    runtimeMode: "home_assistant_app",
+    settingsManagedExternally: true,
+    outputDirectory: path.join(directory, "images"),
+    configFile: path.join(directory, "config.json"),
+    configured: false,
+    haUrl: "http://homeassistant:8123",
+    accessToken: "supervisor-option-secret",
+    imageScheduleTimezone: "UTC",
+    configUsername: "ingress",
+    configPassword: "managed-by-supervisor",
+    customCsses: [], tasks: [], images: [],
+  };
+  await fs.mkdir(config.outputDirectory);
+  let activations = 0;
+  const manager = new TaskManager({ async capture() { return { capturedAt: new Date() }; } }, config, silentLogger, {
+    activateCapture: async () => { activations += 1; },
+  });
+  await manager.replace({
+    settings: { haUrl: "http://attacker.invalid", accessToken: "replacement" },
+    tasks: [{ id: "display", refreshIntervalSeconds: 0 }],
+    images: [],
+  });
+  await manager.stop();
+  assert.equal(activations, 1);
+  assert.equal(config.configured, true);
+  assert.equal(config.haUrl, "http://homeassistant:8123");
+  const saved = JSON.parse(await fs.readFile(config.configFile, "utf8"));
+  assert.equal("settings" in saved, false);
+  assert.doesNotMatch(JSON.stringify(saved), /supervisor-option-secret|replacement/);
+  assert.deepEqual(saved.tasks.map((task) => task.id), ["display"]);
 });
 
 test("failed validation neither persists nor replaces the running configuration", async (t) => {

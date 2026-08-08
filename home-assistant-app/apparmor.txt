@@ -1,0 +1,27 @@
+#include <tunables/global>
+
+profile ha_screenshot flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  network,
+  signal,
+  unix,
+
+  /app/** rmix,
+  /ms-playwright/** rmix,
+  /usr/** rmix,
+  /lib/** rmix,
+  /lib64/** rmix,
+  /etc/** r,
+  /proc/** r,
+  /sys/devices/** r,
+
+  /data/** rwk,
+  /home/pwuser/** rwkmix,
+  /tmp/** rwk,
+  /dev/shm/** rwk,
+  /dev/null rw,
+  /dev/zero rw,
+  /dev/urandom r,
+  /dev/random r,
+}

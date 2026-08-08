@@ -6,7 +6,9 @@ import express from "express";
 import { inspectImageFile } from "./image-file.js";
 
 const publicDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
-const pageCsp = "default-src 'self'; img-src 'self' data:; style-src 'self' https://cdn.jsdelivr.net; style-src-attr 'unsafe-inline'; script-src 'self' https://cdn.jsdelivr.net; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+const bootstrapDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../node_modules/bootstrap/dist");
+const publicPageCsp = "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
+const ingressPageCsp = "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'";
 
 export class CaptureService {
   constructor(capture, task, logger = console, { now = () => new Date() } = {}) {
@@ -178,6 +180,11 @@ function configAuth(config) {
   };
 }
 
+function ingressAuth(request, response, next) {
+  if (request.get("x-remote-user-id")) return next();
+  return response.status(401).send("Home Assistant ingress authentication required");
+}
+
 function requireSameOriginMutation(request, response, next) {
   if (request.get("x-requested-with") !== "ha-screenshot") {
     return response.status(403).json({ error: "Missing mutation request header" });
@@ -185,12 +192,12 @@ function requireSameOriginMutation(request, response, next) {
   return next();
 }
 
-function pageHeaders(response, isAdmin = false) {
+function pageHeaders(response, { admin = false, ingress = false } = {}) {
   response.set({
     "Cache-Control": "no-store",
-    "Content-Security-Policy": pageCsp,
+    "Content-Security-Policy": ingress ? ingressPageCsp : publicPageCsp,
     "X-Content-Type-Options": "nosniff",
-    ...(isAdmin ? { "X-Frame-Options": "DENY" } : {}),
+    ...(admin && !ingress ? { "X-Frame-Options": "DENY" } : {}),
   });
 }
 
@@ -206,12 +213,14 @@ function galleryTask(service, at) {
   };
 }
 
-function adminConfiguration(manager, config, now) {
+function adminConfiguration(manager, config, now, { previewPrefix = "", publicBaseUrl = "" } = {}) {
   const at = now();
   const statusById = new Map(manager.services.map((service) => [service.task.id, service.status(at, true)]));
   const definition = manager.configuration();
   return {
     setupRequired: !config.configured,
+    settingsManagedExternally: Boolean(config.settingsManagedExternally),
+    publicBaseUrl: config.publicBaseUrl || "",
     settings: {
       haUrl: definition.settings.haUrl,
       accessTokenConfigured: Boolean(definition.settings.accessToken),
@@ -221,13 +230,17 @@ function adminConfiguration(manager, config, now) {
     },
     customCsses: definition.customCsses ?? [],
     tasks: definition.tasks.map((task) => ({
-      ...task, imageUrl: `/screenshots/${task.id}`, status: statusById.get(task.id),
+      ...task,
+      imageUrl: `${previewPrefix}/screenshots/${task.id}`,
+      publicUrl: `${publicBaseUrl}/screenshots/${task.id}`,
+      status: statusById.get(task.id),
     })),
     images: definition.images.map((image) => {
       const service = manager.resolveImage(image, at);
       return {
         ...image,
-        imageUrl: `/images/${image.id}`,
+        imageUrl: `${previewPrefix}/images/${image.id}`,
+        publicUrl: `${publicBaseUrl}/images/${image.id}`,
         activeTaskId: service.task.id,
         width: service.task.width,
         height: service.task.height,
@@ -238,12 +251,8 @@ function adminConfiguration(manager, config, now) {
   };
 }
 
-export function createApp(manager, config, { now = () => new Date() } = {}) {
-  const app = express();
-  const requireConfigAuth = configAuth(config);
-  app.disable("x-powered-by");
-
-  app.get("/", requireConfigAuth, (request, response) => {
+function addPublicRoutes(app, manager, config, { now, galleryAuth = (request, response, next) => next() }) {
+  app.get("/", galleryAuth, (request, response) => {
     pageHeaders(response);
     return response.sendFile(path.join(publicDirectory, "gallery.html"));
   });
@@ -251,12 +260,14 @@ export function createApp(manager, config, { now = () => new Date() } = {}) {
   app.get("/gallery.js", (request, response) => response.type("js").sendFile(path.join(publicDirectory, "gallery.js")));
 
   app.get("/screenshots/:taskId", (request, response) => {
+    if (!config.configured) return response.status(503).json({ error: "Configuration required" });
     const service = manager.getService(request.params.taskId);
     if (!service) return response.status(404).json({ error: "Screenshot task not found" });
     return sendImage(service, request, response, now());
   });
 
   app.get("/images/:imageId", (request, response) => {
+    if (!config.configured) return response.status(503).json({ error: "Configuration required" });
     const image = manager.getImage(request.params.imageId);
     if (!image) return response.status(404).json({ error: "Scheduled image not found" });
     const at = now();
@@ -264,6 +275,7 @@ export function createApp(manager, config, { now = () => new Date() } = {}) {
   });
 
   app.get("/healthz", (request, response) => {
+    if (!config.configured) return response.status(503).json({ status: "configuration_required" });
     const at = now();
     const tasks = manager.services.map((service) => service.status(at));
     const images = config.images.map((image) => {
@@ -275,6 +287,8 @@ export function createApp(manager, config, { now = () => new Date() } = {}) {
     const state = ready ? "ok" : tasks.some((task) => task.stale) ? "degraded" : "starting";
     return response.status(ready ? 200 : 503).json({ status: state, tasks, images });
   });
+
+  app.get("/livez", (request, response) => response.json({ status: "ok" }));
 
   app.get("/api/gallery", (request, response) => {
     const at = now();
@@ -296,34 +310,87 @@ export function createApp(manager, config, { now = () => new Date() } = {}) {
       tasks: manager.services.map((service) => galleryTask(service, at)),
     });
   });
+}
 
-  app.use("/admin", requireConfigAuth, (request, response, next) => {
-    pageHeaders(response, true);
+function addAdminRoutes(app, manager, config, {
+  now, auth, ingress = false, apiPrefixes = ["/admin/api"], previewPrefix = "/admin/preview",
+  previewUrlPrefix = "preview",
+} = {}) {
+  const configuration = () => adminConfiguration(manager, config, now, {
+    previewPrefix: previewUrlPrefix,
+    publicBaseUrl: config.publicBaseUrl || "",
+  });
+
+  app.get("/admin/vendor/bootstrap.min.css", auth, (request, response) => response.type("css").sendFile(path.join(bootstrapDirectory, "css/bootstrap.min.css")));
+  app.get("/admin/vendor/bootstrap.bundle.min.js", auth, (request, response) => response.type("js").sendFile(path.join(bootstrapDirectory, "js/bootstrap.bundle.min.js")));
+
+  app.use("/admin", auth, (request, response, next) => {
+    pageHeaders(response, { admin: true, ingress });
     next();
   }, express.static(publicDirectory));
 
-  app.use("/api/config", requireConfigAuth, express.json({ limit: "512kb" }));
-  app.get("/api/config", (request, response) => {
-    return response.set("Cache-Control", "no-store").json(adminConfiguration(manager, config, now));
+  app.get(`${previewPrefix}/screenshots/:taskId`, auth, (request, response) => {
+    const service = manager.getService(request.params.taskId);
+    if (!service) return response.status(404).json({ error: "Screenshot task not found" });
+    return sendImage(service, request, response, now());
   });
-  app.put("/api/config", requireSameOriginMutation, async (request, response) => {
-    try {
-      await manager.replace({
-        settings: request.body?.settings,
-        customCsses: request.body?.customCsses,
-        tasks: request.body?.tasks,
-        images: request.body?.images,
-      });
-      return response.json(adminConfiguration(manager, config, now));
-    } catch (error) {
-      return response.status(400).json({ error: error.message });
-    }
+  app.get(`${previewPrefix}/images/:imageId`, auth, (request, response) => {
+    const image = manager.getImage(request.params.imageId);
+    if (!image) return response.status(404).json({ error: "Scheduled image not found" });
+    const at = now();
+    return sendImage(manager.resolveImage(image, at), request, response, at);
   });
 
-  app.post("/api/tasks/:id/capture", requireConfigAuth, requireSameOriginMutation, (request, response) => {
-    const capture = manager.refresh(request.params.id);
-    if (!capture) return response.status(404).json({ error: "Screenshot task not found" });
-    return response.status(202).json({ status: "capturing" });
+  for (const apiPrefix of apiPrefixes) {
+    app.use(`${apiPrefix}/config`, auth, express.json({ limit: "512kb" }));
+    app.get(`${apiPrefix}/config`, (request, response) => response.set("Cache-Control", "no-store").json(configuration()));
+    app.put(`${apiPrefix}/config`, requireSameOriginMutation, async (request, response) => {
+      try {
+        await manager.replace({
+          settings: request.body?.settings,
+          customCsses: request.body?.customCsses,
+          tasks: request.body?.tasks,
+          images: request.body?.images,
+        });
+        return response.json(configuration());
+      } catch (error) {
+        return response.status(400).json({ error: error.message });
+      }
+    });
+    app.post(`${apiPrefix}/tasks/:id/capture`, auth, requireSameOriginMutation, (request, response) => {
+      const capture = manager.refresh(request.params.id);
+      if (!capture) return response.status(404).json({ error: "Screenshot task not found" });
+      return response.status(202).json({ status: "capturing" });
+    });
+  }
+}
+
+function newApp() {
+  const app = express();
+  app.disable("x-powered-by");
+  app.get("/vendor/bootstrap.min.css", (request, response) => response.type("css").sendFile(path.join(bootstrapDirectory, "css/bootstrap.min.css")));
+  app.get("/vendor/bootstrap.bundle.min.js", (request, response) => response.type("js").sendFile(path.join(bootstrapDirectory, "js/bootstrap.bundle.min.js")));
+  return app;
+}
+
+export function createPublicApp(manager, config, { now = () => new Date() } = {}) {
+  const app = newApp();
+  addPublicRoutes(app, manager, config, { now });
+  return app;
+}
+
+export function createAdminApp(manager, config, { now = () => new Date() } = {}) {
+  const app = newApp();
+  addAdminRoutes(app, manager, config, { now, auth: ingressAuth, ingress: true });
+  return app;
+}
+
+export function createApp(manager, config, { now = () => new Date() } = {}) {
+  const app = newApp();
+  const auth = configAuth(config);
+  addPublicRoutes(app, manager, config, { now, galleryAuth: auth });
+  addAdminRoutes(app, manager, config, {
+    now, auth, apiPrefixes: ["/api", "/admin/api"], previewPrefix: "", previewUrlPrefix: "",
   });
 
   return app;
