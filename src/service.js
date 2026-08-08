@@ -6,7 +6,7 @@ import express from "express";
 import { inspectImageFile } from "./image-file.js";
 
 const publicDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
-const bootstrapDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../node_modules/bootstrap/dist");
+const bootstrapDirectory = path.join(publicDirectory, "vendor/bootstrap");
 const publicPageCsp = "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 const ingressPageCsp = "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'";
 
@@ -321,9 +321,6 @@ function addAdminRoutes(app, manager, config, {
     publicBaseUrl: config.publicBaseUrl || "",
   });
 
-  app.get("/admin/vendor/bootstrap.min.css", auth, (request, response) => response.type("css").sendFile(path.join(bootstrapDirectory, "css/bootstrap.min.css")));
-  app.get("/admin/vendor/bootstrap.bundle.min.js", auth, (request, response) => response.type("js").sendFile(path.join(bootstrapDirectory, "js/bootstrap.bundle.min.js")));
-
   app.use("/admin", auth, (request, response, next) => {
     pageHeaders(response, { admin: true, ingress });
     next();
@@ -368,8 +365,8 @@ function addAdminRoutes(app, manager, config, {
 function newApp() {
   const app = express();
   app.disable("x-powered-by");
-  app.get("/vendor/bootstrap.min.css", (request, response) => response.type("css").sendFile(path.join(bootstrapDirectory, "css/bootstrap.min.css")));
-  app.get("/vendor/bootstrap.bundle.min.js", (request, response) => response.type("js").sendFile(path.join(bootstrapDirectory, "js/bootstrap.bundle.min.js")));
+  app.get("/vendor/bootstrap/bootstrap.min.css", (request, response) => response.type("css").sendFile(path.join(bootstrapDirectory, "bootstrap.min.css")));
+  app.get("/vendor/bootstrap/bootstrap.bundle.min.js", (request, response) => response.type("js").sendFile(path.join(bootstrapDirectory, "bootstrap.bundle.min.js")));
   return app;
 }
 

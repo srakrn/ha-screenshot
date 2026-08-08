@@ -2,7 +2,9 @@
 
 ## Status
 
-Proposed implementation plan. This document does not describe shipped functionality.
+Implemented. Bootstrap 5.3.8 CSS, bundled JavaScript, and its MIT license are
+vendored in `public/vendor/bootstrap/`; the application has no runtime Bootstrap
+package dependency or external frontend asset source.
 
 ## Goal
 

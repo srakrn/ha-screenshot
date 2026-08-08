@@ -13,7 +13,6 @@
     "node": ">=20.9"
   },
   "dependencies": {
-    "bootstrap": "5.3.8",
     "express": "5.1.0",
     "playwright": "1.62.0",
     "sharp": "0.35.3"

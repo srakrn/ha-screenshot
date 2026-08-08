@@ -222,6 +222,10 @@ npm test
 docker compose --env-file .env.example config --no-interpolate
 ```
 
+The gallery and editor use vendored, same-origin frontend assets and require no
+internet access at runtime. See [Frontend assets](docs/frontend-assets.md) for
+the pinned Bootstrap version, checksums, licensing, and update procedure.
+
 For direct local execution, install a Chromium binary compatible with the pinned Playwright version and run `npm run start:env`. The supported Docker image already contains the matching browser.
 
 For a real integration check, verify token authentication, exact PNG/JPEG dimensions, independent task rendering options, scheduled switching and fallback behavior, failed-refresh retention, manual capture, and clean shutdown. Never put live credentials in tests or committed fixtures.
