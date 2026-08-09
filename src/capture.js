@@ -3,6 +3,34 @@ import path from "node:path";
 import { chromium } from "playwright";
 import { captureDimensions, processImage } from "./image-processing.js";
 
+export const FAILURE_CATEGORIES = Object.freeze({
+  AUTHENTICATION: "authentication",
+  NAVIGATION: "navigation",
+  READINESS_TIMEOUT: "readiness_timeout",
+  CUSTOM_CSS: "custom_css",
+  SCREENSHOT_WRITE: "screenshot_write",
+  BROWSER_UNAVAILABLE: "browser_unavailable",
+  SHUTDOWN: "shutdown",
+});
+
+export class CaptureError extends Error {
+  constructor(category, cause) {
+    super(`Capture failed: ${category}`, { cause });
+    this.name = "CaptureError";
+    this.category = category;
+  }
+}
+
+const closedBrowserPattern = /browser.*(?:closed|disconnected)|target (?:page, context or browser )?has been closed|connection closed/i;
+
+export function captureFailure(error, fallback = FAILURE_CATEGORIES.NAVIGATION) {
+  if (error instanceof CaptureError) return error;
+  const category = closedBrowserPattern.test(String(error?.message || error))
+    ? FAILURE_CATEGORIES.BROWSER_UNAVAILABLE
+    : fallback;
+  return new CaptureError(category, error);
+}
+
 export async function readCustomCss(task) {
   const fileCss = task.customCssFile ? await fs.readFile(task.customCssFile, "utf8") : "";
   const stabilityCss = [
@@ -37,29 +65,71 @@ async function injectCssIntoOpenShadowRoots(page, css) {
 }
 
 export class DashboardCapture {
-  constructor(config, logger = console) {
+  constructor(config, logger = console, { launch = (options) => chromium.launch(options) } = {}) {
     this.config = config;
     this.logger = logger;
     this.browser = null;
+    this.launch = launch;
+    this.restartPromise = null;
+    this.stopPromise = null;
+    this.stopping = false;
+    this.contexts = new Set();
   }
 
   async start() {
     await fs.mkdir(this.config.outputDirectory, { recursive: true });
-    this.browser = await chromium.launch({ headless: true });
+    this.stopping = false;
+    await this.ensureBrowser();
+  }
+
+  browserIsAvailable(browser = this.browser) {
+    return Boolean(browser && (typeof browser.isConnected !== "function" || browser.isConnected()));
+  }
+
+  async ensureBrowser(failedBrowser = null) {
+    if (this.stopping) throw new CaptureError(FAILURE_CATEGORIES.SHUTDOWN);
+    if (this.browserIsAvailable() && this.browser !== failedBrowser) return this.browser;
+    if (!this.restartPromise) {
+      this.restartPromise = (async () => {
+        const previous = this.browser;
+        this.browser = null;
+        if (previous && this.browserIsAvailable(previous)) await previous.close().catch(() => {});
+        if (this.stopping) throw new CaptureError(FAILURE_CATEGORIES.SHUTDOWN);
+        const browser = await this.launch({ headless: true });
+        if (this.stopping) {
+          await browser.close().catch(() => {});
+          throw new CaptureError(FAILURE_CATEGORIES.SHUTDOWN);
+        }
+        this.browser = browser;
+        browser.on?.("disconnected", () => {
+          if (this.browser === browser) this.browser = null;
+        });
+        return browser;
+      })().catch((error) => { throw captureFailure(error, FAILURE_CATEGORIES.BROWSER_UNAVAILABLE); })
+        .finally(() => { this.restartPromise = null; });
+    }
+    return this.restartPromise;
   }
 
   async capture(task) {
-    if (!this.browser) throw new Error("Browser is not started");
+    if (this.stopping) throw new CaptureError(FAILURE_CATEGORIES.SHUTDOWN);
+    const browser = await this.ensureBrowser();
     const captureSize = captureDimensions(task);
-    const context = await this.browser.newContext({
-      viewport: captureSize,
-      deviceScaleFactor: 1,
-      colorScheme: task.colorScheme,
-      timezoneId: task.timezone,
-      ignoreHTTPSErrors: this.config.ignoreHttpsErrors,
-    });
+    let context;
 
     try {
+      try {
+        context = await browser.newContext({
+          viewport: captureSize,
+          deviceScaleFactor: 1,
+          colorScheme: task.colorScheme,
+          timezoneId: task.timezone,
+          ignoreHTTPSErrors: this.config.ignoreHttpsErrors,
+        });
+        this.contexts.add(context);
+      } catch (error) {
+        throw captureFailure(error, FAILURE_CATEGORIES.BROWSER_UNAVAILABLE);
+      }
       await context.addInitScript(({ token, hassUrl }) => {
         if (location.origin === new URL(hassUrl).origin) {
           localStorage.setItem("hassTokens", JSON.stringify({ hassUrl, access_token: token }));
@@ -69,23 +139,35 @@ export class DashboardCapture {
       const page = await context.newPage();
       page.setDefaultTimeout(task.navigationTimeoutMs);
       page.setDefaultNavigationTimeout(task.navigationTimeoutMs);
-      await page.goto(task.dashboardUrl, { waitUntil: "domcontentloaded" });
-
-      if (new URL(page.url()).pathname.includes("/auth/")) {
-        throw new Error("Home Assistant showed the login page; check the URL and access token in Settings");
+      try {
+        await page.goto(task.dashboardUrl, { waitUntil: "domcontentloaded" });
+      } catch (error) {
+        throw captureFailure(error, FAILURE_CATEGORIES.NAVIGATION);
       }
 
-      await page.waitForSelector(task.waitForSelector, { state: "attached" });
+      if (new URL(page.url()).pathname.includes("/auth/")) {
+        throw new CaptureError(FAILURE_CATEGORIES.AUTHENTICATION);
+      }
+
+      try {
+        await page.waitForSelector(task.waitForSelector, { state: "attached" });
+      } catch (error) {
+        throw captureFailure(error, FAILURE_CATEGORIES.READINESS_TIMEOUT);
+      }
       if (task.waitAfterLoadMs > 0) await page.waitForTimeout(task.waitAfterLoadMs);
       if (new URL(page.url()).pathname.includes("/auth/")) {
-        throw new Error("Home Assistant showed the login page; check the URL and access token in Settings");
+        throw new CaptureError(FAILURE_CATEGORIES.AUTHENTICATION);
       }
 
-      await page.evaluate((zoom) => {
-        document.documentElement.style.zoom = String(zoom);
-      }, task.zoom);
-      await injectCssIntoOpenShadowRoots(page, await readCustomCss(task));
-      await page.evaluate(() => document.fonts?.ready);
+      try {
+        await page.evaluate((zoom) => {
+          document.documentElement.style.zoom = String(zoom);
+        }, task.zoom);
+        await injectCssIntoOpenShadowRoots(page, await readCustomCss(task));
+        await page.evaluate(() => document.fonts?.ready);
+      } catch (error) {
+        throw captureFailure(error, FAILURE_CATEGORIES.CUSTOM_CSS);
+      }
 
       const sourcePath = path.join(
         this.config.outputDirectory,
@@ -103,20 +185,42 @@ export class DashboardCapture {
       };
       if (task.format === "jpeg") options.quality = task.jpegQuality;
       try {
-        await page.screenshot(options);
-        await processImage(sourcePath, processedPath, task);
-        await fs.rename(processedPath, task.outputPath);
+        try {
+          await page.screenshot(options);
+          await processImage(sourcePath, processedPath, task);
+          await fs.rename(processedPath, task.outputPath);
+        } catch (error) {
+          throw captureFailure(error, FAILURE_CATEGORIES.SCREENSHOT_WRITE);
+        }
       } finally {
         await Promise.all([fs.rm(sourcePath, { force: true }), fs.rm(processedPath, { force: true })]);
       }
       return { path: task.outputPath, capturedAt: new Date() };
+    } catch (error) {
+      const failure = captureFailure(error);
+      if (failure.category === FAILURE_CATEGORIES.BROWSER_UNAVAILABLE && !this.stopping) {
+        await this.ensureBrowser(browser).catch(() => {});
+      }
+      throw this.stopping ? new CaptureError(FAILURE_CATEGORIES.SHUTDOWN, error) : failure;
     } finally {
-      await context.close();
+      if (context) {
+        this.contexts.delete(context);
+        await context.close().catch(() => {});
+      }
     }
   }
 
   async stop() {
-    await this.browser?.close();
-    this.browser = null;
+    if (this.stopPromise) return this.stopPromise;
+    this.stopping = true;
+    this.stopPromise = (async () => {
+      await this.restartPromise?.catch(() => {});
+      await Promise.all([...this.contexts].map((context) => context.close().catch(() => {})));
+      this.contexts.clear();
+      const browser = this.browser;
+      this.browser = null;
+      if (browser) await browser.close().catch(() => {});
+    })();
+    return this.stopPromise;
   }
 }

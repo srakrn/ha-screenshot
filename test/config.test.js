@@ -110,6 +110,23 @@ test("validates maximum image age", () => {
   assert.throws(() => loadConfig(environment({ tasks: [{ id: "display", maximumImageAgeSeconds: 1.5 }], images: [] })), /maximumImageAgeSeconds/);
 });
 
+test("defaults and validates bounded capture retry settings", () => {
+  const defaults = loadConfig(environment({ tasks: [{ id: "display" }], images: [] })).tasks[0];
+  assert.equal(defaults.retryAttempts, 2);
+  assert.equal(defaults.retryInitialDelaySeconds, 2);
+  assert.equal(defaults.retryMaximumDelaySeconds, 30);
+
+  const configured = loadConfig(environment({ tasks: [{
+    id: "display", retryAttempts: 4, retryInitialDelaySeconds: 0, retryMaximumDelaySeconds: 12,
+  }], images: [] })).tasks[0];
+  assert.equal(configured.retryAttempts, 4);
+  assert.equal(configured.retryInitialDelaySeconds, 0);
+  assert.equal(configured.retryMaximumDelaySeconds, 12);
+  assert.throws(() => loadConfig(environment({ tasks: [{ id: "display", retryAttempts: 11 }], images: [] })), /retryAttempts/);
+  assert.throws(() => loadConfig(environment({ tasks: [{ id: "display", retryInitialDelaySeconds: -1 }], images: [] })), /retryInitialDelaySeconds/);
+  assert.throws(() => loadConfig(environment({ tasks: [{ id: "display", retryInitialDelaySeconds: 10, retryMaximumDelaySeconds: 9 }], images: [] })), /retryMaximumDelaySeconds/);
+});
+
 test("normalizes scheduled images and overnight ranges", () => {
   const config = loadConfig(environment({
     tasks: [{ id: "day", width: 800, height: 480 }, { id: "night", width: 800, height: 480 }],

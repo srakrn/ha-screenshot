@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import { inspectImageFile } from "./image-file.js";
+import { captureFailure, FAILURE_CATEGORIES } from "./capture.js";
 
 const publicDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../public");
 const bootstrapDirectory = path.join(publicDirectory, "vendor/bootstrap");
@@ -11,11 +12,12 @@ const publicPageCsp = "default-src 'self'; img-src 'self' data:; style-src 'self
 const ingressPageCsp = "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'";
 
 export class CaptureService {
-  constructor(capture, task, logger = console, { now = () => new Date() } = {}) {
+  constructor(capture, task, logger = console, { now = () => new Date(), random = Math.random } = {}) {
     this.capture = capture;
     this.task = task;
     this.logger = logger;
     this.now = now;
+    this.random = random;
     this.lastCaptureAt = null;
     this.lastAttemptAt = null;
     this.captureStartedAt = null;
@@ -23,8 +25,12 @@ export class CaptureService {
     this.consecutiveFailures = 0;
     this.nextCaptureAt = null;
     this.lastError = null;
+    this.lastAttemptCount = 0;
     this.inFlight = null;
     this.timer = null;
+    this.retryTimer = null;
+    this.cancelRetry = null;
+    this.stopping = false;
     this.imageMetadata = null;
     this.imageSignature = null;
     const metadata = this.loadImageMetadata();
@@ -72,8 +78,9 @@ export class CaptureService {
       lastAttemptAt: this.lastAttemptAt?.toISOString() || null,
       lastCaptureDurationMs: this.lastCaptureDurationMs,
       consecutiveFailures: this.consecutiveFailures,
+      lastAttemptCount: this.lastAttemptCount,
       nextCaptureAt: this.nextCaptureAt?.toISOString() || null,
-      lastError: this.lastError ? (includeErrorDetail ? this.lastError.message : "Capture failed") : null,
+      lastError: this.lastError?.category || null,
     };
   }
 
@@ -81,20 +88,22 @@ export class CaptureService {
     if (this.inFlight) return this.inFlight;
     const startedAt = this.now();
     this.captureStartedAt = startedAt;
-    this.lastAttemptAt = startedAt;
-    this.inFlight = this.capture.capture(this.task)
-      .then(({ capturedAt }) => {
+    this.lastAttemptCount = 0;
+    this.inFlight = this.captureWithRetries()
+      .then((result) => {
+        if (!result) return;
+        const { capturedAt } = result;
         const metadata = this.loadImageMetadata(true);
-        if (!metadata) throw new Error("Capture did not produce a valid image with the configured format and dimensions");
+        if (!metadata) throw captureFailure(new Error("Capture output validation failed"), FAILURE_CATEGORIES.SCREENSHOT_WRITE);
         this.lastCaptureAt = capturedAt || metadata.lastModified;
         this.lastError = null;
         this.consecutiveFailures = 0;
         this.logger.info(`Captured task ${this.task.id} at ${this.task.width}x${this.task.height} on ${this.lastCaptureAt.toISOString()}`);
       })
       .catch((error) => {
-        this.lastError = error;
+        this.lastError = captureFailure(error);
         this.consecutiveFailures += 1;
-        this.logger.error(`Screenshot task ${this.task.id} failed`, error);
+        this.logger.error(`Screenshot task ${this.task.id} failed: ${this.lastError.category}`);
       })
       .finally(() => {
         this.lastCaptureDurationMs = Math.max(0, this.now().getTime() - startedAt.getTime());
@@ -104,7 +113,53 @@ export class CaptureService {
     return this.inFlight;
   }
 
+  async captureWithRetries() {
+    const retries = this.task.retryAttempts ?? 0;
+    for (let attempt = 0; attempt <= retries; attempt += 1) {
+      if (this.stopping) throw captureFailure(null, FAILURE_CATEGORIES.SHUTDOWN);
+      this.lastAttemptAt = this.now();
+      this.lastAttemptCount = attempt + 1;
+      try {
+        const result = await this.capture.capture(this.task);
+        if (!this.loadImageMetadata(true)) {
+          throw captureFailure(new Error("Capture output validation failed"), FAILURE_CATEGORIES.SCREENSHOT_WRITE);
+        }
+        return result;
+      } catch (error) {
+        const failure = captureFailure(error);
+        const transient = new Set([
+          FAILURE_CATEGORIES.NAVIGATION,
+          FAILURE_CATEGORIES.READINESS_TIMEOUT,
+          FAILURE_CATEGORIES.SCREENSHOT_WRITE,
+          FAILURE_CATEGORIES.BROWSER_UNAVAILABLE,
+        ]).has(failure.category);
+        if (!transient || attempt >= retries || this.stopping) throw failure;
+        const initial = (this.task.retryInitialDelaySeconds ?? 0) * 1000;
+        const maximum = (this.task.retryMaximumDelaySeconds ?? this.task.retryInitialDelaySeconds ?? 0) * 1000;
+        const bounded = Math.min(maximum, initial * (2 ** attempt));
+        const delay = Math.min(maximum, Math.round(bounded * (0.9 + this.random() * 0.2)));
+        this.logger.info(`Retrying screenshot task ${this.task.id} after ${failure.category}`);
+        if (!await this.waitForRetry(delay)) throw captureFailure(null, FAILURE_CATEGORIES.SHUTDOWN);
+      }
+    }
+    return null;
+  }
+
+  waitForRetry(delay) {
+    if (this.stopping) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      this.cancelRetry = () => resolve(false);
+      this.retryTimer = setTimeout(() => {
+        this.retryTimer = null;
+        this.cancelRetry = null;
+        resolve(true);
+      }, delay);
+      this.retryTimer.unref?.();
+    });
+  }
+
   startSchedule() {
+    this.stopping = false;
     void this.refresh();
     if (this.task.refreshIntervalSeconds > 0) {
       const intervalMs = this.task.refreshIntervalSeconds * 1000;
@@ -118,7 +173,12 @@ export class CaptureService {
   }
 
   stopSchedule() {
+    this.stopping = true;
     if (this.timer) clearInterval(this.timer);
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.cancelRetry?.();
+    this.retryTimer = null;
+    this.cancelRetry = null;
     this.timer = null;
     this.nextCaptureAt = null;
   }

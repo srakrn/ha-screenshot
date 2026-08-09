@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import sharp from "sharp";
 import { CaptureService, createAdminApp, createApp, createPublicApp } from "../src/service.js";
+import { CaptureError, FAILURE_CATEGORIES } from "../src/capture.js";
 
 const task = { id: "test", width: 800, height: 480, refreshIntervalSeconds: 0, maximumImageAgeSeconds: 0, outputPath: "/tmp/not-created-ha-screenshot.png", outputFilename: "test.png", format: "png" };
 const silentLogger = { info() {}, error() {} };
@@ -35,7 +36,75 @@ test("different tasks capture independently and failures remain scheduler state"
   await Promise.all([first.refresh(), second.refresh()]);
   assert.deepEqual(captured.sort(), ["first", "second"]);
   const failed = new CaptureService({ async capture() { throw new Error("HA unavailable"); } }, task, silentLogger);
-  await failed.refresh(); assert.equal(failed.lastError.message, "HA unavailable");
+  await failed.refresh(); assert.equal(failed.lastError.category, "navigation");
+});
+
+test("retries transient failures, coalesces the sequence, and records attempts", async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ha-screenshot-retry-"));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const captureTask = {
+    ...task, outputPath: path.join(directory, "retry.png"), retryAttempts: 2,
+    retryInitialDelaySeconds: 0, retryMaximumDelaySeconds: 0,
+  };
+  let calls = 0;
+  const capture = { async capture(value) {
+    calls += 1;
+    if (calls === 1) throw new CaptureError(FAILURE_CATEGORIES.NAVIGATION);
+    await fs.writeFile(value.outputPath, await png());
+    return { capturedAt: new Date("2026-08-03T00:00:00Z") };
+  } };
+  const service = new CaptureService(capture, captureTask, silentLogger, { random: () => 0.5 });
+  const first = service.refresh();
+  const second = service.refresh();
+  assert.equal(first, second);
+  await first;
+  assert.equal(calls, 2);
+  assert.equal(service.lastAttemptCount, 2);
+  assert.equal(service.lastError, null);
+});
+
+test("does not retry authentication and exhausts transient retries safely", async () => {
+  let authenticationCalls = 0;
+  const authentication = new CaptureService({ async capture() {
+    authenticationCalls += 1;
+    throw new CaptureError(FAILURE_CATEGORIES.AUTHENTICATION, new Error("token must stay private"));
+  } }, { ...task, retryAttempts: 3, retryInitialDelaySeconds: 0, retryMaximumDelaySeconds: 0 }, silentLogger);
+  await authentication.refresh();
+  assert.equal(authenticationCalls, 1);
+  assert.equal(authentication.status().lastError, "authentication");
+  assert.doesNotMatch(JSON.stringify(authentication.status()), /token must stay private/);
+
+  let transientCalls = 0;
+  const exhausted = new CaptureService({ async capture() {
+    transientCalls += 1;
+    throw new CaptureError(FAILURE_CATEGORIES.READINESS_TIMEOUT);
+  } }, { ...task, retryAttempts: 2, retryInitialDelaySeconds: 0, retryMaximumDelaySeconds: 0 }, silentLogger);
+  await exhausted.refresh();
+  assert.equal(transientCalls, 3);
+  assert.equal(exhausted.lastAttemptCount, 3);
+  assert.equal(exhausted.status().lastError, "readiness_timeout");
+});
+
+test("another task runs during backoff and shutdown cancels the retry", async () => {
+  let slowCalls = 0;
+  const slow = new CaptureService({ async capture() {
+    slowCalls += 1;
+    throw new CaptureError(FAILURE_CATEGORIES.NAVIGATION);
+  } }, { ...task, id: "slow", retryAttempts: 2, retryInitialDelaySeconds: 30, retryMaximumDelaySeconds: 30 }, silentLogger);
+  const slowRefresh = slow.refresh();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.ok(slow.retryTimer);
+
+  let fastCalls = 0;
+  const fast = new CaptureService({ async capture() { fastCalls += 1; return { capturedAt: new Date() }; } }, { ...task, id: "fast" }, silentLogger);
+  await fast.refresh();
+  assert.equal(fastCalls, 1);
+  assert.equal(slowCalls, 1);
+
+  slow.stopSchedule();
+  await slowRefresh;
+  assert.equal(slowCalls, 1);
+  assert.equal(slow.status().lastError, "shutdown");
 });
 
 async function httpFixture(t) {
@@ -163,7 +232,7 @@ test("serves stale last-good images while health reports degraded", async (t) =>
   const healthResponse = await fetch(`${base}/healthz`);
   const health = await healthResponse.json();
   assert.equal(healthResponse.status, 503); assert.equal(health.status, "degraded");
-  assert.equal(health.tasks[0].stale, true); assert.equal(health.tasks[0].lastError, "Capture failed");
+  assert.equal(health.tasks[0].stale, true); assert.equal(health.tasks[0].lastError, "navigation");
   assert.doesNotMatch(JSON.stringify(health), /private upstream detail/);
   const image = await fetch(`${base}/screenshots/test`);
   assert.equal(image.status, 200); assert.equal(image.headers.get("x-image-stale"), "true");

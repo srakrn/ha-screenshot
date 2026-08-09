@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed implementation plan. This document does not describe shipped functionality.
+Implemented.
 
 ## Goal
 

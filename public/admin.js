@@ -26,6 +26,7 @@ let settingsManagedExternally = false;
 const taskDefaults = {
   id: "new-task", dashboardPath: "/lovelace/0", width: 800, height: 480,
   refreshIntervalSeconds: 300, maximumImageAgeSeconds: 0, waitAfterLoadMs: 3000, colorScheme: "light",
+  retryAttempts: 2, retryInitialDelaySeconds: 2, retryMaximumDelaySeconds: 30,
   timezone: "UTC", disableAnimations: true, zoom: 1, format: "png", jpegQuality: 85,
   navigationTimeoutMs: 60000, waitForSelector: "home-assistant", customCss: "",
   customCssFile: "", customCssIds: [], hideCursor: true, outputFilename: "new-task.png",
@@ -230,6 +231,9 @@ function readTask() {
     width: Number(taskForm.elements.width.value), height: Number(taskForm.elements.height.value),
     refreshIntervalSeconds: Number(taskForm.elements.refreshIntervalSeconds.value),
     maximumImageAgeSeconds: Number(taskForm.elements.maximumImageAgeSeconds.value),
+    retryAttempts: Number(taskForm.elements.retryAttempts.value),
+    retryInitialDelaySeconds: Number(taskForm.elements.retryInitialDelaySeconds.value),
+    retryMaximumDelaySeconds: Number(taskForm.elements.retryMaximumDelaySeconds.value),
     waitAfterLoadMs: Number(taskForm.elements.waitAfterLoadMs.value), colorScheme: taskForm.elements.colorScheme.value,
     timezone: taskForm.elements.timezone.value.trim(), disableAnimations: taskForm.elements.disableAnimations.checked,
     zoom: Number(taskForm.elements.zoom.value), format: taskForm.elements.format.value,

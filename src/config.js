@@ -188,6 +188,21 @@ function taskFromDefinition(definition, index, shared, customCssById) {
   if (new Set(selectedCssIds).size !== selectedCssIds.length) {
     throw new Error(`${label}.customCssIds must not contain duplicates`);
   }
+  const retryInitialDelaySeconds = integerValue(
+    definition.retryInitialDelaySeconds,
+    `${label}.retryInitialDelaySeconds`,
+    2,
+    { min: 0, max: 3600 },
+  );
+  const retryMaximumDelaySeconds = integerValue(
+    definition.retryMaximumDelaySeconds,
+    `${label}.retryMaximumDelaySeconds`,
+    30,
+    { min: 0, max: 3600 },
+  );
+  if (retryMaximumDelaySeconds < retryInitialDelaySeconds) {
+    throw new Error(`${label}.retryMaximumDelaySeconds must be greater than or equal to ${label}.retryInitialDelaySeconds`);
+  }
   return {
     id,
     dashboardPath,
@@ -199,6 +214,9 @@ function taskFromDefinition(definition, index, shared, customCssById) {
     jpegQuality: integerValue(definition.jpegQuality, `${label}.jpegQuality`, 85, { min: 1, max: 100 }),
     refreshIntervalSeconds: integerValue(definition.refreshIntervalSeconds, `${label}.refreshIntervalSeconds`, 300, { min: 0 }),
     maximumImageAgeSeconds: integerValue(definition.maximumImageAgeSeconds, `${label}.maximumImageAgeSeconds`, 0, { min: 0 }),
+    retryAttempts: integerValue(definition.retryAttempts, `${label}.retryAttempts`, 2, { min: 0, max: 10 }),
+    retryInitialDelaySeconds,
+    retryMaximumDelaySeconds,
     navigationTimeoutMs: integerValue(definition.navigationTimeoutMs, `${label}.navigationTimeoutMs`, 60000, { min: 1000 }),
     waitAfterLoadMs: integerValue(definition.waitAfterLoadMs, `${label}.waitAfterLoadMs`, 3000, { min: 0 }),
     waitForSelector: stringValue(definition.waitForSelector, `${label}.waitForSelector`, "home-assistant"),
@@ -332,6 +350,8 @@ export function taskToDefinition(task) {
   return {
     id: task.id, dashboardPath: task.dashboardPath, width: task.width, height: task.height,
     refreshIntervalSeconds: task.refreshIntervalSeconds, maximumImageAgeSeconds: task.maximumImageAgeSeconds,
+    retryAttempts: task.retryAttempts, retryInitialDelaySeconds: task.retryInitialDelaySeconds,
+    retryMaximumDelaySeconds: task.retryMaximumDelaySeconds,
     waitAfterLoadMs: task.waitAfterLoadMs,
     colorScheme: task.colorScheme, timezone: task.timezone, disableAnimations: task.disableAnimations,
     zoom: task.zoom, format: task.format, jpegQuality: task.jpegQuality,

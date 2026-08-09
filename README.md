@@ -150,6 +150,9 @@ The **Schedule timezone** web setting controls weekly schedule selection globall
 | `width` / `height` | `800` / `480` | Exact output dimensions in pixels |
 | `refreshIntervalSeconds` | `300` | Capture period; `0` means startup only |
 | `maximumImageAgeSeconds` | `0` | Maximum last-good image age before readiness becomes stale; `0` disables the age limit |
+| `retryAttempts` | `2` | Additional attempts after a likely transient capture failure (maximum `10`) |
+| `retryInitialDelaySeconds` | `2` | Initial retry delay before small jitter is applied |
+| `retryMaximumDelaySeconds` | `30` | Maximum exponential retry delay; must be at least the initial delay |
 | `waitAfterLoadMs` | `3000` | Additional render time after Home Assistant loads |
 | `colorScheme` | `light` | Browser preference: `light` or `dark` |
 | `timezone` | `UTC` | Browser IANA timezone for dashboard dates and clocks |
