@@ -11,6 +11,7 @@ const settingsForm = document.querySelector("#settings-form");
 const taskModal = new bootstrap.Modal("#task-modal");
 const cssModal = new bootstrap.Modal("#css-modal");
 const imageModal = new bootstrap.Modal("#image-modal");
+const errorLogModal = new bootstrap.Modal("#error-log-modal");
 const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 const adminRoot = new URL("./", document.baseURI);
 const adminUrl = (relativePath) => new URL(relativePath, adminRoot);
@@ -119,6 +120,26 @@ function actionButton(label, action, id, style = "outline-secondary") {
   return button;
 }
 
+function showErrorLog(task) {
+  document.querySelector("#error-log-modal-title").textContent = `Capture error log: ${task.id}`;
+  const body = document.querySelector("#error-log");
+  const entries = task.status?.errorLog || [];
+  body.replaceChildren();
+  for (const entry of entries) {
+    const row = document.createElement("tr");
+    row.insertCell().textContent = new Date(entry.at).toLocaleString();
+    const category = row.insertCell();
+    const code = document.createElement("code"); code.textContent = entry.category; category.append(code);
+    row.insertCell().textContent = String(entry.attempt);
+    const detail = row.insertCell();
+    const message = document.createElement("pre"); message.className = "error-detail mb-0"; message.textContent = entry.message; detail.append(message);
+    body.append(row);
+  }
+  document.querySelector("#error-log-empty").hidden = entries.length !== 0;
+  body.closest(".table-responsive").hidden = entries.length === 0;
+  errorLogModal.show();
+}
+
 function publicImageUrl(item, fallback) {
   const value = item.publicUrl || fallback;
   if (!settingsManagedExternally || /^https?:\/\//.test(value)) return value;
@@ -139,7 +160,7 @@ function renderTasks() {
     row.insertCell().textContent = intervalLabel(task.refreshIntervalSeconds);
     const actions = row.insertCell(); actions.className = "text-end text-nowrap";
     const group = document.createElement("div"); group.className = "btn-group";
-    group.append(actionButton("Capture", "capture", task.id, "outline-success"), actionButton("Edit", "edit-task", task.id), actionButton("Delete", "delete-task", task.id, "outline-danger"));
+    group.append(actionButton("Capture", "capture", task.id, "outline-success"), actionButton("Logs", "error-log", task.id), actionButton("Edit", "edit-task", task.id), actionButton("Delete", "delete-task", task.id, "outline-danger"));
     actions.append(group);
     tasksBody.append(row);
   }
@@ -337,6 +358,7 @@ tasksBody.addEventListener("click", async (event) => {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
   const index = draft.tasks.findIndex((task) => task.id === button.dataset.id);
+  if (button.dataset.action === "error-log") showErrorLog(draft.tasks[index]);
   if (button.dataset.action === "edit-task") { editingTask = index; setTaskForm(draft.tasks[index]); taskModal.show(); }
   if (button.dataset.action === "delete-task") {
     const referenced = draft.images.find((image) => image.fallbackTaskId === button.dataset.id || image.slots.some((slot) => slot.taskId === button.dataset.id));

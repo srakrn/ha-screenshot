@@ -85,6 +85,32 @@ test("does not retry authentication and exhausts transient retries safely", asyn
   assert.equal(exhausted.status().lastError, "readiness_timeout");
 });
 
+test("retains a bounded sanitized capture error log only in detailed status", async () => {
+  let calls = 0;
+  const secret = "super-secret-token";
+  const service = new CaptureService({ async capture() {
+    calls += 1;
+    throw new CaptureError(
+      FAILURE_CATEGORIES.NAVIGATION,
+      new Error(`Attempt ${calls} failed at https://ha.local/path?access_token=${secret} with Authorization: Bearer another-token`),
+    );
+  } }, {
+    ...task, retryAttempts: 24, retryInitialDelaySeconds: 0, retryMaximumDelaySeconds: 0,
+  }, silentLogger, { redactions: [secret] });
+
+  await service.refresh();
+  const publicStatus = service.status();
+  const detailedStatus = service.status(new Date(), true);
+  assert.equal("errorLog" in publicStatus, false);
+  assert.equal(detailedStatus.errorLog.length, 20);
+  assert.equal(detailedStatus.errorLog[0].attempt, 25);
+  assert.equal(detailedStatus.errorLog[19].attempt, 6);
+  assert.match(detailedStatus.errorLog[0].message, /Attempt 25 failed/);
+  assert.match(detailedStatus.errorLog[0].message, /access_token=\[REDACTED\]/);
+  assert.match(detailedStatus.errorLog[0].message, /Bearer \[REDACTED\]/);
+  assert.doesNotMatch(JSON.stringify(detailedStatus), /super-secret-token|another-token/);
+});
+
 test("another task runs during backoff and shutdown cancels the retry", async () => {
   let slowCalls = 0;
   const slow = new CaptureService({ async capture() {
@@ -260,7 +286,8 @@ test("serves JPEG metadata and rejects a wrong-sized persisted image", async (t)
 });
 
 test("serves the authenticated gallery and public health metadata", async (t) => {
-  const { base } = await httpFixture(t);
+  const { base, services } = await httpFixture(t);
+  services[0].recordCaptureError(new Error("admin-only upstream detail"), 1);
   assert.equal((await fetch(`${base}/`)).status, 401);
   const authorization = `Basic ${Buffer.from("admin:editor-secret").toString("base64")}`;
   const pageResponse = await fetch(`${base}/`, { headers: { authorization } }); const page = await pageResponse.text();
@@ -283,10 +310,12 @@ test("serves the authenticated gallery and public health metadata", async (t) =>
   assert.equal(galleryResponse.status, 200); assert.equal(gallery.images[0].activeTaskId, "morning"); assert.equal(gallery.tasks[0].imageUrl, "/screenshots/morning");
   const healthResponse = await fetch(`${base}/healthz`); const health = await healthResponse.json();
   assert.equal(healthResponse.status, 200); assert.equal(health.images[0].activeTaskId, "morning");
+  assert.doesNotMatch(JSON.stringify({ gallery, health }), /errorLog|admin-only upstream detail/);
 });
 
 test("protects configuration reads and mutations", async (t) => {
-  const { base, replacements } = await httpFixture(t);
+  const { base, replacements, services } = await httpFixture(t);
+  services[0].recordCaptureError(new Error("authenticated diagnostic detail"), 2);
   assert.equal((await fetch(`${base}/api/config`)).status, 401);
   const authorization = `Basic ${Buffer.from("admin:editor-secret").toString("base64")}`;
   const configResponse = await fetch(`${base}/api/config`, { headers: { authorization } });
@@ -296,6 +325,8 @@ test("protects configuration reads and mutations", async (t) => {
   assert.equal(configBody.settings.configPasswordConfigured, true);
   assert.equal("accessToken" in configBody.settings, false);
   assert.equal("configPassword" in configBody.settings, false);
+  assert.equal(configBody.tasks[0].status.errorLog[0].attempt, 2);
+  assert.match(configBody.tasks[0].status.errorLog[0].message, /authenticated diagnostic detail/);
   assert.equal((await fetch(`${base}/api/config`, { method: "PUT", headers: { authorization, "content-type": "application/json" }, body: JSON.stringify({ tasks: [], images: [] }) })).status, 403);
   const update = await fetch(`${base}/api/config`, {
     method: "PUT",

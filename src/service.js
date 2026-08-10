@@ -10,9 +10,36 @@ const publicDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)
 const bootstrapDirectory = path.join(publicDirectory, "vendor/bootstrap");
 const publicPageCsp = "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'";
 const ingressPageCsp = "default-src 'self'; img-src 'self' data:; style-src 'self'; style-src-attr 'unsafe-inline'; script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'self'";
+const maximumCaptureErrorEntries = 20;
+
+function redactCaptureError(value, redactions) {
+  let result = String(value || "Unknown capture error");
+  for (const sensitiveValue of redactions) {
+    if (sensitiveValue) result = result.split(String(sensitiveValue)).join("[REDACTED]");
+  }
+  return result
+    .replace(/\b(Bearer)\s+[A-Za-z0-9._~+/=-]+/gi, "$1 [REDACTED]")
+    .replace(/([?&](?:access_?token|token|api_?key|password|secret)=)[^&#\s]*/gi, "$1[REDACTED]")
+    .replace(/\b(access_?token|token|api_?key|password|secret)\s*[:=]\s*["']?[^"'\s,;}]+/gi, "$1=[REDACTED]");
+}
+
+function captureErrorDetail(error, redactions) {
+  const messages = [];
+  const visited = new Set();
+  let current = error;
+  while (current && !visited.has(current) && messages.length < 5) {
+    visited.add(current);
+    const message = redactCaptureError(current.message || current, redactions).trim();
+    if (message && !messages.includes(message)) messages.push(message);
+    current = current.cause;
+  }
+  return messages.join("\nCaused by: ").slice(0, 4000);
+}
 
 export class CaptureService {
-  constructor(capture, task, logger = console, { now = () => new Date(), random = Math.random } = {}) {
+  constructor(capture, task, logger = console, {
+    now = () => new Date(), random = Math.random, redactions = [],
+  } = {}) {
     this.capture = capture;
     this.task = task;
     this.logger = logger;
@@ -25,6 +52,8 @@ export class CaptureService {
     this.consecutiveFailures = 0;
     this.nextCaptureAt = null;
     this.lastError = null;
+    this.errorLog = [];
+    this.redactions = redactions.filter(Boolean);
     this.lastAttemptCount = 0;
     this.inFlight = null;
     this.timer = null;
@@ -65,7 +94,7 @@ export class CaptureService {
     const imageAgeSeconds = imageAt ? Math.max(0, Math.floor((at.getTime() - imageAt.getTime()) / 1000)) : null;
     const maximumAge = this.task.maximumImageAgeSeconds || 0;
     const stale = Boolean(metadata && maximumAge > 0 && imageAgeSeconds > maximumAge);
-    return {
+    const status = {
       id: this.task.id,
       ready: Boolean(metadata) && !stale,
       stale,
@@ -82,6 +111,21 @@ export class CaptureService {
       nextCaptureAt: this.nextCaptureAt?.toISOString() || null,
       lastError: this.lastError?.category || null,
     };
+    if (includeErrorDetail) status.errorLog = this.errorLog.map((entry) => ({ ...entry }));
+    return status;
+  }
+
+  recordCaptureError(error, attempt) {
+    const failure = captureFailure(error);
+    const entry = {
+      at: this.now().toISOString(),
+      category: failure.category,
+      attempt,
+      message: captureErrorDetail(failure, this.redactions),
+    };
+    this.errorLog.unshift(entry);
+    this.errorLog.length = Math.min(this.errorLog.length, maximumCaptureErrorEntries);
+    return failure;
   }
 
   refresh() {
@@ -126,7 +170,7 @@ export class CaptureService {
         }
         return result;
       } catch (error) {
-        const failure = captureFailure(error);
+        const failure = this.recordCaptureError(error, attempt + 1);
         const transient = new Set([
           FAILURE_CATEGORIES.NAVIGATION,
           FAILURE_CATEGORIES.READINESS_TIMEOUT,

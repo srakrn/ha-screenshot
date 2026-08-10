@@ -10,8 +10,13 @@ export class TaskManager {
     this.config = config;
     this.logger = logger;
     this.activateCapture = activateCapture;
-    this.services = config.tasks.map((task) => new CaptureService(capture, task, logger));
+    this.services = this.createServices(config.tasks, config);
     this.updateQueue = Promise.resolve();
+  }
+
+  createServices(tasks, config = this.config) {
+    const redactions = [config.accessToken, config.configPassword];
+    return tasks.map((task) => new CaptureService(this.capture, task, this.logger, { redactions }));
   }
 
   start() {
@@ -106,7 +111,7 @@ export class TaskManager {
     if (tasksChanged) {
       await this.stopServices();
       this.config.tasks = normalized.tasks;
-      this.services = normalized.tasks.map((task) => new CaptureService(this.capture, task, this.logger));
+      this.services = this.createServices(normalized.tasks, normalized);
     }
     this.config.haUrl = normalized.haUrl;
     this.config.accessToken = normalized.accessToken;

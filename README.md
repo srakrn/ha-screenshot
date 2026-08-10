@@ -193,6 +193,8 @@ All other service settings are managed through `/admin/`. The service itself lis
 - `GET /api/config` and `PUT /api/config` require editor authentication. The mutation also requires `X-Requested-With: ha-screenshot`.
 - `POST /api/tasks/:id/capture` requires the same authentication and mutation header.
 
+The authenticated Admin task list includes a **Logs** action. It shows the newest 20 failed capture attempts for that task, including retry number, failure category, timestamp, and a sanitized cause chain. This history is held in memory and is cleared when the service restarts or task services are recreated. Public gallery and health endpoints expose only the failure category.
+
 The gallery and editor pages share the same HTTP Basic authentication after setup. Public image, gallery-metadata, and health routes remain unauthenticated so display clients can poll without credentials. Before initial setup, both pages are open so credentials can be created. Keep port 3000 on a trusted network during setup and add network-level access control or an HTTPS reverse proxy when exposing it outside a trusted LAN. HTTP Basic credentials are encoded, not encrypted.
 
 The container bundles pinned Bootstrap 5.3.8 assets, so the gallery and administration UI have no runtime CDN dependency.
