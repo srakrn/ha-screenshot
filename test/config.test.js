@@ -66,7 +66,7 @@ test("loads task defaults and global schedule timezone", () => {
   assert.equal(config.tasks[0].timezone, "Asia/Bangkok");
   assert.equal(config.imageScheduleTimezone, "Asia/Bangkok");
   assert.deepEqual(config.tasks[0].imageProcessing, {
-    mode: "color", palette: [], dither: "none", threshold: 128, invert: false, rotation: 0,
+    mode: "color", levels: 256, palette: [], dither: "none", threshold: 128, invert: false, rotation: 0,
   });
 });
 
@@ -90,7 +90,7 @@ test("normalizes reusable custom CSS and ordered task references", () => {
   assert.deepEqual(config.tasks[0].customCssIds, ["base", "eink"]);
   assert.deepEqual(config.tasks[0].reusableCustomCss, ["ha-card { border: 0; }", "* { color: black; }"]);
   assert.deepEqual(config.tasks[0].imageProcessing, {
-    mode: "monochrome", palette: [], dither: "atkinson", threshold: 140, invert: true, rotation: 90,
+    mode: "monochrome", levels: 256, palette: [], dither: "atkinson", threshold: 140, invert: true, rotation: 90,
   });
 });
 
@@ -99,7 +99,15 @@ test("rejects invalid reusable CSS references and image processing", () => {
   assert.throws(() => loadConfig(environment(configuration({ customCssIds: ["missing"] }))), /existing custom CSS/);
   assert.throws(() => loadConfig(environment(configuration({}, [{ id: "same", css: "a" }, { id: "same", css: "b" }]))), /Duplicate custom CSS/);
   assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { mode: "sepia" } }))), /mode/);
-  assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { mode: "grayscale", dither: "atkinson" } }))), /requires monochrome/);
+  for (const levels of [2, 4, 256]) {
+    assert.equal(loadConfig(environment(configuration({ imageProcessing: { mode: "grayscale", levels } }))).tasks[0].imageProcessing.levels, levels);
+  }
+  assert.equal(loadConfig(environment(configuration({ imageProcessing: { mode: "grayscale", levels: 4, dither: "atkinson" } }))).tasks[0].imageProcessing.dither, "atkinson");
+  for (const levels of [1, 257, 4.5]) {
+    assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { mode: "grayscale", levels } }))), /levels/);
+  }
+  assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { mode: "color", dither: "atkinson" } }))), /requires monochrome or quantized grayscale/);
+  assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { mode: "grayscale", levels: 256, dither: "atkinson" } }))), /levels below 256/);
   assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { rotation: 45 } }))), /rotation/);
   assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { palette: ["#000000"] } }))), /not supported/);
 });

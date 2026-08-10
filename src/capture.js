@@ -95,7 +95,7 @@ export class DashboardCapture {
         this.browser = null;
         if (previous && this.browserIsAvailable(previous)) await previous.close().catch(() => {});
         if (this.stopping) throw new CaptureError(FAILURE_CATEGORIES.SHUTDOWN);
-        const browser = await this.launch({ headless: true });
+        const browser = await this.launch({ headless: true, args: ["--disable-lcd-text"] });
         if (this.stopping) {
           await browser.close().catch(() => {});
           throw new CaptureError(FAILURE_CATEGORIES.SHUTDOWN);

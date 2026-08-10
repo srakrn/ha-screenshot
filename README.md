@@ -89,7 +89,8 @@ The complete configuration is saved atomically and hot-applied by the web editor
       "customCssIds": ["eink-cards"],
       "customCss": ".morning-only { display: none !important; }",
       "imageProcessing": {
-        "mode": "monochrome",
+        "mode": "grayscale",
+        "levels": 4,
         "palette": [],
         "dither": "atkinson",
         "threshold": 128,
@@ -165,8 +166,9 @@ The **Schedule timezone** web setting controls weekly schedule selection globall
 | `customCssIds` | `[]` | Ordered IDs of reusable top-level `customCsses` to inject |
 | `hideCursor` | `true` | Hide the pointer |
 | `imageProcessing.mode` | `color` | `color`, `grayscale`, or `monochrome` |
+| `imageProcessing.levels` | `256` | Evenly spaced grayscale tones from `2` through `256`; four levels are `0`, `85`, `170`, and `255` |
 | `imageProcessing.palette` | `[]` | Reserved; must remain empty until custom palettes are supported |
-| `imageProcessing.dither` | `none` | `none`, `floyd-steinberg`, or `atkinson`; non-`none` requires monochrome mode |
+| `imageProcessing.dither` | `none` | `none`, `floyd-steinberg`, or `atkinson`; error diffusion requires monochrome or grayscale with fewer than 256 levels |
 | `imageProcessing.threshold` | `128` | Monochrome split point from `0` through `255`; values at the threshold become white |
 | `imageProcessing.invert` | `false` | Invert the processed RGB output |
 | `imageProcessing.rotation` | `0` | Clockwise rotation: `0`, `90`, `180`, or `270` degrees |
@@ -204,9 +206,11 @@ For a file-based style, place the file in the data volume and reference it as `/
 
 ## Native eInk image processing
 
-Each task can transform its captured pixels before the last-good image is atomically replaced. Grayscale uses fixed luminance coefficients. Monochrome output supports a direct threshold plus deterministic Floyd–Steinberg or Atkinson error diffusion. Inversion is applied after color reduction, and rotation is applied last.
+Each task can transform its captured pixels before the last-good image is atomically replaced. Grayscale uses fixed luminance coefficients and can reduce the result to any evenly spaced palette from 2 through 256 levels. Four levels produce the standard 2-bit grayscale tones `0`, `85`, `170`, and `255`. Monochrome output retains its configurable threshold. Both reduced grayscale and monochrome support deterministic Floyd–Steinberg or Atkinson error diffusion. Inversion is applied after color reduction, and rotation is applied last.
 
-`width` and `height` always describe the delivered image. For a 90° or 270° rotation, the service swaps the Chromium capture dimensions before rotating, so the final file still has the configured dimensions. Processing failures leave the previous successful image untouched. PNG is recommended for monochrome panels; JPEG remains available with the configured quality but can introduce compression artifacts around hard black-and-white edges.
+For reduced grayscale, `none` preserves crisp regions with direct nearest-tone quantization, Atkinson applies restrained diffusion that often suits text-heavy dashboards, and Floyd–Steinberg preserves gradients more aggressively. Use PNG when decoded pixels must contain exactly the configured tones: a four-level PNG is written as an indexed two-bit image. JPEG remains available for compatibility, but lossy compression can introduce tones outside the configured palette.
+
+`width` and `height` always describe the delivered image. For a 90° or 270° rotation, the service swaps the Chromium capture dimensions before rotating, so the final file still has the configured dimensions. Processing failures leave the previous successful image untouched. Chromium renders text with grayscale rather than RGB subpixel antialiasing before image reduction, while preserving normal antialiasing and the one-to-one browser/output pixel mapping.
 
 If Home Assistant runs on the Docker host, `localhost` inside the container is not the host. Docker Desktop users can use `host.docker.internal`. Linux users can add:
 

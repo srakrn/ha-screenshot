@@ -31,7 +31,7 @@ const taskDefaults = {
   timezone: "UTC", disableAnimations: true, zoom: 1, format: "png", jpegQuality: 85,
   navigationTimeoutMs: 60000, waitForSelector: "home-assistant", customCss: "",
   customCssFile: "", customCssIds: [], hideCursor: true,
-  imageProcessing: { mode: "color", palette: [], dither: "none", threshold: 128, invert: false, rotation: 0 },
+  imageProcessing: { mode: "color", levels: 256, palette: [], dither: "none", threshold: 128, invert: false, rotation: 0 },
 };
 
 function showNotice(message, kind = "danger") {
@@ -237,16 +237,20 @@ function setTaskForm(task) {
   customCssOptions(task.customCssIds || []);
   const processing = { ...taskDefaults.imageProcessing, ...task.imageProcessing };
   taskForm.elements.imageProcessingMode.value = processing.mode;
+  taskForm.elements.imageProcessingLevels.value = processing.levels;
   taskForm.elements.imageProcessingDither.value = processing.dither;
   taskForm.elements.imageProcessingThreshold.value = processing.threshold;
   taskForm.elements.imageProcessingRotation.value = processing.rotation;
   taskForm.elements.imageProcessingInvert.checked = processing.invert;
-  updateDitherAvailability();
+  updateProcessingAvailability();
   document.querySelector("#task-error").hidden = true;
 }
 
 function readTask() {
   if (!taskForm.reportValidity()) throw new Error("Correct the highlighted task fields.");
+  const processingMode = taskForm.elements.imageProcessingMode.value;
+  const processingLevels = Number(taskForm.elements.imageProcessingLevels.value);
+  const supportsDither = processingMode === "monochrome" || (processingMode === "grayscale" && processingLevels < 256);
   return {
     id: taskForm.elements.id.value.trim(), dashboardPath: taskForm.elements.dashboardPath.value.trim(),
     width: Number(taskForm.elements.width.value), height: Number(taskForm.elements.height.value),
@@ -262,8 +266,8 @@ function readTask() {
     customCssFile: taskForm.elements.customCssFile.value.trim(), hideCursor: taskForm.elements.hideCursor.checked,
     customCssIds: [...taskForm.elements.customCssIds.selectedOptions].map((option) => option.value),
     imageProcessing: {
-      mode: taskForm.elements.imageProcessingMode.value, palette: [],
-      dither: taskForm.elements.imageProcessingDither.value,
+      mode: processingMode, levels: processingLevels, palette: [],
+      dither: supportsDither ? taskForm.elements.imageProcessingDither.value : "none",
       threshold: Number(taskForm.elements.imageProcessingThreshold.value),
       invert: taskForm.elements.imageProcessingInvert.checked,
       rotation: Number(taskForm.elements.imageProcessingRotation.value),
@@ -271,11 +275,14 @@ function readTask() {
   };
 }
 
-function updateDitherAvailability() {
-  const monochrome = taskForm.elements.imageProcessingMode.value === "monochrome";
-  taskForm.elements.imageProcessingDither.disabled = !monochrome;
+function updateProcessingAvailability() {
+  const mode = taskForm.elements.imageProcessingMode.value;
+  const monochrome = mode === "monochrome";
+  const grayscale = mode === "grayscale";
+  const levels = Number(taskForm.elements.imageProcessingLevels.value);
+  taskForm.elements.imageProcessingLevels.disabled = !grayscale;
+  taskForm.elements.imageProcessingDither.disabled = !(monochrome || (grayscale && levels < 256));
   taskForm.elements.imageProcessingThreshold.disabled = !monochrome;
-  if (!monochrome) taskForm.elements.imageProcessingDither.value = "none";
 }
 
 function taskOptions(select, selected) {
@@ -449,7 +456,8 @@ taskForm.addEventListener("submit", (event) => {
   } catch (error) { showFormError(document.querySelector("#task-error"), error.message); }
 });
 
-taskForm.elements.imageProcessingMode.addEventListener("change", updateDitherAvailability);
+taskForm.elements.imageProcessingMode.addEventListener("change", updateProcessingAvailability);
+taskForm.elements.imageProcessingLevels.addEventListener("input", updateProcessingAvailability);
 
 cssForm.addEventListener("submit", (event) => {
   event.preventDefault();

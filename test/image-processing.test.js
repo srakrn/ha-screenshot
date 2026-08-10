@@ -13,7 +13,7 @@ function task(overrides = {}) {
     format: "png",
     jpegQuality: 85,
     imageProcessing: {
-      mode: "color", palette: [], dither: "none", threshold: 128, invert: false, rotation: 0,
+      mode: "color", levels: 256, palette: [], dither: "none", threshold: 128, invert: false, rotation: 0,
       ...overrides,
     },
   };
@@ -61,6 +61,42 @@ test("produces binary deterministic dithering and threshold boundaries", async (
     const data = await sharp(paths.output).removeAlpha().raw().toBuffer();
     assert.deepEqual([...data].filter((_, index) => index % 3 === 0), expectedTones);
   }
+});
+
+test("quantizes grayscale to exact nearest four-level tones", async (t) => {
+  const paths = await fixture(t);
+  const input = [0, 42, 43, 127, 128, 212, 213, 255];
+  await writeRaw(paths.source, 8, 1, input.flatMap((tone) => [tone, tone, tone]));
+  await processImage(paths.source, paths.output, { ...task({ mode: "grayscale", levels: 4 }), width: 8, height: 1 });
+  const data = await sharp(paths.output).removeAlpha().raw().toBuffer();
+  assert.deepEqual([...data].filter((_, index) => index % 3 === 0), [0, 0, 85, 85, 170, 170, 255, 255]);
+});
+
+test("produces deterministic four-level grayscale dithering", async (t) => {
+  const paths = await fixture(t);
+  const input = [40, 70, 100, 130, 160, 190, 220, 250];
+  await writeRaw(paths.source, 4, 2, input.flatMap((tone) => [tone, tone, tone]));
+  const expected = {
+    "floyd-steinberg": [0, 85, 85, 170, 170, 170, 255, 255],
+    atkinson: [0, 85, 85, 170, 170, 170, 255, 255],
+  };
+  for (const [dither, expectedTones] of Object.entries(expected)) {
+    await processImage(paths.source, paths.output, { ...task({ mode: "grayscale", levels: 4, dither }), width: 4 });
+    const data = await sharp(paths.output).removeAlpha().raw().toBuffer();
+    assert.deepEqual([...data].filter((_, index) => index % 3 === 0), expectedTones);
+  }
+});
+
+test("encodes four-level PNG as indexed two-bit data", async (t) => {
+  const paths = await fixture(t);
+  const input = [0, 85, 170, 255];
+  await writeRaw(paths.source, 4, 1, input.flatMap((tone) => [tone, tone, tone]));
+  await processImage(paths.source, paths.output, { ...task({ mode: "grayscale", levels: 4 }), width: 4, height: 1 });
+  const encoded = await fs.readFile(paths.output);
+  assert.equal(encoded[24], 2);
+  assert.equal(encoded[25], 3);
+  const data = await sharp(encoded).removeAlpha().raw().toBuffer();
+  assert.deepEqual([...data].filter((_, index) => index % 3 === 0), input);
 });
 
 test("rotates while preserving configured final dimensions and output format", async (t) => {

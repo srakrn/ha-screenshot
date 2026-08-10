@@ -22,6 +22,17 @@ test("composes reusable, file, and task CSS in override order", async (t) => {
   assert.deepEqual(positions, [...positions].sort((a, b) => a - b));
 });
 
+test("launches Chromium with grayscale text antialiasing", async () => {
+  let launchOptions;
+  const browser = { isConnected: () => true, on() {}, async close() {} };
+  const capture = new DashboardCapture({ outputDirectory: os.tmpdir() }, console, {
+    launch: async (options) => { launchOptions = options; return browser; },
+  });
+  await capture.start();
+  assert.deepEqual(launchOptions, { headless: true, args: ["--disable-lcd-text"] });
+  await capture.stop();
+});
+
 test("serializes browser recovery across concurrent failed captures", async () => {
   let launches = 0;
   let firstCloseCalls = 0;

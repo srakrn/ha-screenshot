@@ -35,7 +35,8 @@
       "zoom": 1,
       "format": "png",
       "imageProcessing": {
-        "mode": "monochrome",
+        "mode": "grayscale",
+        "levels": 4,
         "palette": [],
         "dither": "atkinson",
         "threshold": 128,

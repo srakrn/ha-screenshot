@@ -128,8 +128,12 @@ function imageProcessingValue(definition, label) {
   if (!["none", "floyd-steinberg", "atkinson"].includes(dither)) {
     throw new Error(`${label}.imageProcessing.dither must be none, floyd-steinberg, or atkinson`);
   }
-  if (dither !== "none" && mode !== "monochrome") {
-    throw new Error(`${label}.imageProcessing.dither requires monochrome mode`);
+  const levels = integerValue(value.levels, `${label}.imageProcessing.levels`, 256, { min: 2, max: 256 });
+  if (dither !== "none" && mode === "color") {
+    throw new Error(`${label}.imageProcessing.dither requires monochrome or quantized grayscale mode`);
+  }
+  if (dither !== "none" && mode === "grayscale" && levels === 256) {
+    throw new Error(`${label}.imageProcessing.dither requires grayscale levels below 256`);
   }
   const palette = value.palette ?? [];
   if (!Array.isArray(palette) || palette.length > 0) {
@@ -141,6 +145,7 @@ function imageProcessingValue(definition, label) {
   }
   return {
     mode,
+    levels,
     palette: [],
     dither,
     threshold: integerValue(value.threshold, `${label}.imageProcessing.threshold`, 128, { min: 0, max: 255 }),

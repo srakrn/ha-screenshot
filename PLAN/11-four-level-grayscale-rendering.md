@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed implementation plan. This document does not describe shipped functionality.
+Implemented. The service ships configurable evenly spaced grayscale levels, deterministic reduced-grayscale dithering, indexed two-bit four-level PNG output, and grayscale browser text antialiasing. Custom nonuniform palettes remain deferred.
 
 ## Goal
 

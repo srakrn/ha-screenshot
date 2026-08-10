@@ -20,7 +20,7 @@ function diffuse(values, width, height, x, y, error, offsets) {
   }
 }
 
-function monochrome(values, width, height, threshold, dither) {
+function reduceTones(values, width, height, dither, selectTone) {
   const offsets = dither === "floyd-steinberg"
     ? [[1, 0, 7 / 16], [-1, 1, 3 / 16], [0, 1, 5 / 16], [1, 1, 1 / 16]]
     : [[1, 0, 1 / 8], [2, 0, 1 / 8], [-1, 1, 1 / 8], [0, 1, 1 / 8], [1, 1, 1 / 8], [0, 2, 1 / 8]];
@@ -28,11 +28,27 @@ function monochrome(values, width, height, threshold, dither) {
     for (let x = 0; x < width; x += 1) {
       const index = y * width + x;
       const original = Math.max(0, Math.min(255, values[index]));
-      const output = original >= threshold ? 255 : 0;
+      const output = selectTone(original);
       values[index] = output;
       if (dither !== "none") diffuse(values, width, height, x, y, original - output, offsets);
     }
   }
+}
+
+function grayscalePalette(levels) {
+  return Array.from({ length: levels }, (_, index) => Math.round(index * 255 / (levels - 1)));
+}
+
+function nearestTone(palette, value) {
+  let low = 0;
+  let high = palette.length - 1;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (value > (palette[middle] + palette[middle + 1]) / 2) low = middle + 1;
+    else if (value === (palette[middle] + palette[middle + 1]) / 2) low = middle + 1;
+    else high = middle;
+  }
+  return palette[low];
 }
 
 export async function processImage(sourcePath, outputPath, task) {
@@ -44,9 +60,19 @@ export async function processImage(sourcePath, outputPath, task) {
 
   const pixels = Buffer.from(data);
   if (task.imageProcessing.mode === "grayscale") {
-    for (let index = 0; index < info.width * info.height; index += 1) {
+    const levels = task.imageProcessing.levels ?? 256;
+    const tones = new Float32Array(info.width * info.height);
+    for (let index = 0; index < tones.length; index += 1) {
       const offset = index * 4;
-      const tone = luminance(pixels[offset], pixels[offset + 1], pixels[offset + 2]);
+      tones[index] = luminance(pixels[offset], pixels[offset + 1], pixels[offset + 2]);
+    }
+    if (levels < 256) {
+      const palette = grayscalePalette(levels);
+      reduceTones(tones, info.width, info.height, task.imageProcessing.dither, (tone) => nearestTone(palette, tone));
+    }
+    for (let index = 0; index < tones.length; index += 1) {
+      const offset = index * 4;
+      const tone = Math.round(tones[index]);
       pixels[offset] = tone;
       pixels[offset + 1] = tone;
       pixels[offset + 2] = tone;
@@ -57,7 +83,13 @@ export async function processImage(sourcePath, outputPath, task) {
       const offset = index * 4;
       tones[index] = luminance(pixels[offset], pixels[offset + 1], pixels[offset + 2]);
     }
-    monochrome(tones, info.width, info.height, task.imageProcessing.threshold, task.imageProcessing.dither);
+    reduceTones(
+      tones,
+      info.width,
+      info.height,
+      task.imageProcessing.dither,
+      (tone) => tone >= task.imageProcessing.threshold ? 255 : 0,
+    );
     for (let index = 0; index < tones.length; index += 1) {
       const offset = index * 4;
       const tone = Math.round(tones[index]);
@@ -76,9 +108,17 @@ export async function processImage(sourcePath, outputPath, task) {
 
   let output = sharp(pixels, { raw: { width: info.width, height: info.height, channels: 4 } })
     .rotate(task.imageProcessing.rotation);
+  const indexedLevels = task.imageProcessing.mode === "grayscale" && (task.imageProcessing.levels ?? 256) < 256
+    ? task.imageProcessing.levels
+    : null;
   output = task.format === "jpeg"
     ? output.flatten({ background: "#ffffff" }).jpeg({ quality: task.jpegQuality, chromaSubsampling: "4:4:4" })
-    : output.png({ compressionLevel: 9, adaptiveFiltering: false, palette: false });
+    : output.png({
+      compressionLevel: 9,
+      adaptiveFiltering: false,
+      palette: indexedLevels !== null,
+      ...(indexedLevels === null ? {} : { colours: indexedLevels, dither: 0 }),
+    });
   await output.toFile(outputPath);
 
   const metadata = await sharp(outputPath).metadata();
