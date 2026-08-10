@@ -7,7 +7,7 @@ import sharp from "sharp";
 import { CaptureService, createAdminApp, createApp, createPublicApp } from "../src/service.js";
 import { CaptureError, FAILURE_CATEGORIES } from "../src/capture.js";
 
-const task = { id: "test", width: 800, height: 480, refreshIntervalSeconds: 0, maximumImageAgeSeconds: 0, outputPath: "/tmp/not-created-ha-screenshot.png", outputFilename: "test.png", format: "png" };
+const task = { id: "test", width: 800, height: 480, refreshIntervalSeconds: 0, outputPath: "/tmp/not-created-ha-screenshot.png", outputFilename: "test.png", format: "png" };
 const silentLogger = { info() {}, error() {} };
 
 async function png(width = 800, height = 480, color = "white") {
@@ -218,14 +218,14 @@ test("changes validators after replacement and when a feed switches tasks", asyn
   assert.equal(switched.status, 200); assert.notEqual(switched.headers.get("etag"), feedTag);
 });
 
-test("restores verified images and transitions from fresh to stale", async (t) => {
+test("restores verified images and marks them stale after three refresh periods", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ha-screenshot-restore-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   const outputPath = path.join(directory, "restored.png");
   await fs.writeFile(outputPath, await png());
   const capturedAt = new Date("2026-08-03T00:00:00Z");
   await fs.utimes(outputPath, capturedAt, capturedAt);
-  const restoredTask = { ...task, outputPath, maximumImageAgeSeconds: 60 };
+  const restoredTask = { ...task, outputPath, refreshIntervalSeconds: 20 };
   const service = new CaptureService({}, restoredTask, silentLogger);
   assert.equal(service.status(new Date("2026-08-03T00:01:00Z")).ready, true);
   const stale = service.status(new Date("2026-08-03T00:01:01Z"));
@@ -238,7 +238,7 @@ test("restores verified images and transitions from fresh to stale", async (t) =
 test("serves stale last-good images while health reports degraded", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ha-screenshot-stale-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
-  const staleTask = { ...task, outputPath: path.join(directory, "stale.png"), maximumImageAgeSeconds: 60 };
+  const staleTask = { ...task, outputPath: path.join(directory, "stale.png"), refreshIntervalSeconds: 20 };
   await fs.writeFile(staleTask.outputPath, await png());
   const capturedAt = new Date("2026-08-03T00:00:00Z");
   await fs.utimes(staleTask.outputPath, capturedAt, capturedAt);

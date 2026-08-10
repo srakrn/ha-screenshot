@@ -22,7 +22,6 @@ Create one capture task for each page that should be selectable on the display. 
   "width": 800,
   "height": 480,
   "refreshIntervalSeconds": 300,
-  "maximumImageAgeSeconds": 900,
   "format": "png"
 }
 ```
@@ -277,7 +276,7 @@ The 70 x 18 pixel battery badge intentionally paints a white background over the
 
 ## Refresh and power considerations
 
-The screenshot service and ESPHome have independent intervals. A sensible starting point is five minutes for both `refreshIntervalSeconds` and `image.update_interval`, with `maximumImageAgeSeconds` set comfortably above the capture interval (for example, 15 minutes). Shorter ESPHome polling does not make the server capture faster, although conditional polling makes unchanged checks inexpensive.
+The screenshot service and ESPHome have independent intervals. A sensible starting point is five minutes for both `refreshIntervalSeconds` and `image.update_interval`. The service marks an image stale after three missed capture periods. Shorter ESPHome polling does not make the server capture faster, although conditional polling makes unchanged checks inexpensive.
 
 ESPHome's `online_image` cache validators live in memory and are reset when the device reboots. The first request after boot therefore downloads the full PNG; later unchanged polls receive HTTP 304. The `cached` variable in `on_download_finished` is `true` for those cache hits, which is why the example avoids an unnecessary e-paper refresh.
 

@@ -26,11 +26,11 @@ let settingsManagedExternally = false;
 
 const taskDefaults = {
   id: "new-task", dashboardPath: "/lovelace/0", width: 800, height: 480,
-  refreshIntervalSeconds: 300, maximumImageAgeSeconds: 0, waitAfterLoadMs: 3000, colorScheme: "light",
+  refreshIntervalSeconds: 300, waitAfterLoadMs: 3000, colorScheme: "light",
   retryAttempts: 2, retryInitialDelaySeconds: 2, retryMaximumDelaySeconds: 30,
   timezone: "UTC", disableAnimations: true, zoom: 1, format: "png", jpegQuality: 85,
   navigationTimeoutMs: 60000, waitForSelector: "home-assistant", customCss: "",
-  customCssFile: "", customCssIds: [], hideCursor: true, outputFilename: "new-task.png",
+  customCssFile: "", customCssIds: [], hideCursor: true,
   imageProcessing: { mode: "color", palette: [], dither: "none", threshold: 128, invert: false, rotation: 0 },
 };
 
@@ -251,7 +251,6 @@ function readTask() {
     id: taskForm.elements.id.value.trim(), dashboardPath: taskForm.elements.dashboardPath.value.trim(),
     width: Number(taskForm.elements.width.value), height: Number(taskForm.elements.height.value),
     refreshIntervalSeconds: Number(taskForm.elements.refreshIntervalSeconds.value),
-    maximumImageAgeSeconds: Number(taskForm.elements.maximumImageAgeSeconds.value),
     retryAttempts: Number(taskForm.elements.retryAttempts.value),
     retryInitialDelaySeconds: Number(taskForm.elements.retryInitialDelaySeconds.value),
     retryMaximumDelaySeconds: Number(taskForm.elements.retryMaximumDelaySeconds.value),
@@ -262,7 +261,6 @@ function readTask() {
     waitForSelector: taskForm.elements.waitForSelector.value.trim(), customCss: taskForm.elements.customCss.value,
     customCssFile: taskForm.elements.customCssFile.value.trim(), hideCursor: taskForm.elements.hideCursor.checked,
     customCssIds: [...taskForm.elements.customCssIds.selectedOptions].map((option) => option.value),
-    outputFilename: taskForm.elements.outputFilename.value.trim(),
     imageProcessing: {
       mode: taskForm.elements.imageProcessingMode.value, palette: [],
       dither: taskForm.elements.imageProcessingDither.value,
@@ -405,7 +403,8 @@ document.querySelector("#add-task").addEventListener("click", () => {
 });
 function openNewTask() {
   const id = uniqueId("new-task", new Set(draft.tasks.map((task) => task.id)));
-  editingTask = -1; setTaskForm({ ...taskDefaults, id, outputFilename: `${id}.png` }); taskModal.show();
+  const defaultTimezone = settingsForm.elements.imageScheduleTimezone.value.trim() || timezone;
+  editingTask = -1; setTaskForm({ ...taskDefaults, id, timezone: defaultTimezone }); taskModal.show();
 }
 document.querySelector("#empty-add-task").addEventListener("click", openNewTask);
 document.querySelector("#add-css").addEventListener("click", () => {
@@ -427,7 +426,6 @@ taskForm.addEventListener("submit", (event) => {
   try {
     const task = readTask();
     if (draft.tasks.some((other, index) => index !== editingTask && other.id === task.id)) throw new Error(`Task ID ${task.id} already exists.`);
-    if (draft.tasks.some((other, index) => index !== editingTask && other.outputFilename === task.outputFilename)) throw new Error(`Output filename ${task.outputFilename} already exists.`);
     const oldId = editingTask < 0 ? null : draft.tasks[editingTask].id;
     const candidateTasks = draft.tasks.map((current, index) => index === editingTask ? { ...current, ...task } : current);
     if (editingTask < 0) candidateTasks.push(task);

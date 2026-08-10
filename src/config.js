@@ -168,15 +168,7 @@ function taskFromDefinition(definition, index, shared, customCssById) {
   if (!["light", "dark"].includes(colorScheme)) {
     throw new Error(`${label}.colorScheme must be light or dark`);
   }
-  const defaultFilename = `${id}.${format === "jpeg" ? "jpg" : "png"}`;
-  const outputFilename = definition.outputFilename ?? defaultFilename;
-  if (typeof outputFilename !== "string" || outputFilename.length === 0
-      || [".", ".."].includes(outputFilename) || path.basename(outputFilename) !== outputFilename) {
-    throw new Error(`${label}.outputFilename must be a filename, not a path`);
-  }
-  if (outputFilename === "config.json") {
-    throw new Error(`${label}.outputFilename is reserved for the service configuration`);
-  }
+  const outputFilename = `${id}.${format === "jpeg" ? "jpg" : "png"}`;
   const customCssIds = definition.customCssIds ?? [];
   if (!Array.isArray(customCssIds)) throw new Error(`${label}.customCssIds must be an array`);
   const selectedCssIds = customCssIds.map((id, cssIndex) => {
@@ -213,7 +205,6 @@ function taskFromDefinition(definition, index, shared, customCssById) {
     format,
     jpegQuality: integerValue(definition.jpegQuality, `${label}.jpegQuality`, 85, { min: 1, max: 100 }),
     refreshIntervalSeconds: integerValue(definition.refreshIntervalSeconds, `${label}.refreshIntervalSeconds`, 300, { min: 0 }),
-    maximumImageAgeSeconds: integerValue(definition.maximumImageAgeSeconds, `${label}.maximumImageAgeSeconds`, 0, { min: 0 }),
     retryAttempts: integerValue(definition.retryAttempts, `${label}.retryAttempts`, 2, { min: 0, max: 10 }),
     retryInitialDelaySeconds,
     retryMaximumDelaySeconds,
@@ -225,7 +216,7 @@ function taskFromDefinition(definition, index, shared, customCssById) {
     customCssIds: selectedCssIds,
     reusableCustomCss: selectedCssIds.map((id) => customCssById.get(id)),
     colorScheme,
-    timezone: timezoneValue(definition.timezone, `${label}.timezone`),
+    timezone: timezoneValue(definition.timezone, `${label}.timezone`, shared.imageScheduleTimezone),
     hideCursor: booleanValue(definition.hideCursor, `${label}.hideCursor`, true),
     disableAnimations: booleanValue(definition.disableAnimations, `${label}.disableAnimations`, true),
     outputFilename,
@@ -239,12 +230,9 @@ export function normalizeTasks(definitions, shared, customCsses = []) {
   const customCssById = new Map(customCsses.map((entry) => [entry.id, entry.css]));
   const tasks = definitions.map((definition, index) => taskFromDefinition(definition, index, shared, customCssById));
   const ids = new Set();
-  const filenames = new Set();
   for (const task of tasks) {
     if (ids.has(task.id)) throw new Error(`Duplicate screenshot task id: ${task.id}`);
-    if (filenames.has(task.outputFilename)) throw new Error(`Duplicate screenshot output filename: ${task.outputFilename}`);
     ids.add(task.id);
-    filenames.add(task.outputFilename);
   }
   return tasks;
 }
@@ -349,7 +337,7 @@ export function normalizeConfiguration(definition, shared, { settings: managedSe
 export function taskToDefinition(task) {
   return {
     id: task.id, dashboardPath: task.dashboardPath, width: task.width, height: task.height,
-    refreshIntervalSeconds: task.refreshIntervalSeconds, maximumImageAgeSeconds: task.maximumImageAgeSeconds,
+    refreshIntervalSeconds: task.refreshIntervalSeconds,
     retryAttempts: task.retryAttempts, retryInitialDelaySeconds: task.retryInitialDelaySeconds,
     retryMaximumDelaySeconds: task.retryMaximumDelaySeconds,
     waitAfterLoadMs: task.waitAfterLoadMs,
@@ -357,7 +345,7 @@ export function taskToDefinition(task) {
     zoom: task.zoom, format: task.format, jpegQuality: task.jpegQuality,
     navigationTimeoutMs: task.navigationTimeoutMs, waitForSelector: task.waitForSelector,
     customCss: task.customCss, customCssFile: task.customCssFile, hideCursor: task.hideCursor,
-    customCssIds: [...task.customCssIds], outputFilename: task.outputFilename,
+    customCssIds: [...task.customCssIds],
     imageProcessing: { ...task.imageProcessing, palette: [...task.imageProcessing.palette] },
   };
 }

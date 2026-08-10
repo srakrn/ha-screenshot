@@ -84,7 +84,6 @@ The complete configuration is saved atomically and hot-applied by the web editor
       "width": 800,
       "height": 480,
       "refreshIntervalSeconds": 300,
-      "maximumImageAgeSeconds": 900,
       "timezone": "Asia/Bangkok",
       "format": "png",
       "customCssIds": ["eink-cards"],
@@ -139,7 +138,7 @@ Ranges are start-inclusive and end-exclusive. If the end is earlier than the sta
 
 All tasks referenced by one feed must have exactly the same width, height, and format. This guarantees that the feed's dimensions and content type do not change throughout the day.
 
-The **Schedule timezone** web setting controls weekly schedule selection globally and defaults to `UTC`. This is separate from each task's `timezone`, which controls dates and clocks inside the captured browser page.
+The **Schedule timezone** web setting controls weekly schedule selection globally and defaults to `UTC`. Each task's `timezone` controls dates and clocks inside the captured browser page and defaults to the schedule timezone.
 
 ### Capture task fields
 
@@ -148,14 +147,13 @@ The **Schedule timezone** web setting controls weekly schedule selection globall
 | `id` | required | URL-safe name containing letters, numbers, `_`, or `-` |
 | `dashboardPath` | `/lovelace/0` | Path relative to the Home Assistant URL, or an absolute dashboard URL |
 | `width` / `height` | `800` / `480` | Exact output dimensions in pixels |
-| `refreshIntervalSeconds` | `300` | Capture period; `0` means startup only |
-| `maximumImageAgeSeconds` | `0` | Maximum last-good image age before readiness becomes stale; `0` disables the age limit |
+| `refreshIntervalSeconds` | `300` | Capture period; `0` means startup only. A periodically refreshed image becomes stale after three missed periods |
 | `retryAttempts` | `2` | Additional attempts after a likely transient capture failure (maximum `10`) |
 | `retryInitialDelaySeconds` | `2` | Initial retry delay before small jitter is applied |
 | `retryMaximumDelaySeconds` | `30` | Maximum exponential retry delay; must be at least the initial delay |
 | `waitAfterLoadMs` | `3000` | Additional render time after Home Assistant loads |
 | `colorScheme` | `light` | Browser preference: `light` or `dark` |
-| `timezone` | `UTC` | Browser IANA timezone for dashboard dates and clocks |
+| `timezone` | schedule timezone | Browser IANA timezone for dashboard dates and clocks |
 | `disableAnimations` | `true` | Disable CSS and screenshot animations |
 | `zoom` | `1` | CSS zoom from `0.1` through `5` |
 | `format` | `png` | `png` or `jpeg` |
@@ -166,7 +164,6 @@ The **Schedule timezone** web setting controls weekly schedule selection globall
 | `customCssFile` | empty | Path to an additional CSS file |
 | `customCssIds` | `[]` | Ordered IDs of reusable top-level `customCsses` to inject |
 | `hideCursor` | `true` | Hide the pointer |
-| `outputFilename` | derived | Filename under `OUTPUT_DIRECTORY` |
 | `imageProcessing.mode` | `color` | `color`, `grayscale`, or `monochrome` |
 | `imageProcessing.palette` | `[]` | Reserved; must remain empty until custom palettes are supported |
 | `imageProcessing.dither` | `none` | `none`, `floyd-steinberg`, or `atkinson`; non-`none` requires monochrome mode |

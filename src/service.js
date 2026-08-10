@@ -92,7 +92,7 @@ export class CaptureService {
     const metadata = this.loadImageMetadata();
     const imageAt = this.lastCaptureAt || metadata?.lastModified || null;
     const imageAgeSeconds = imageAt ? Math.max(0, Math.floor((at.getTime() - imageAt.getTime()) / 1000)) : null;
-    const maximumAge = this.task.maximumImageAgeSeconds || 0;
+    const maximumAge = this.task.refreshIntervalSeconds > 0 ? this.task.refreshIntervalSeconds * 3 : 0;
     const stale = Boolean(metadata && maximumAge > 0 && imageAgeSeconds > maximumAge);
     const status = {
       id: this.task.id,

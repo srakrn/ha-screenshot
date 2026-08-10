@@ -61,8 +61,9 @@ test("loads task defaults and global schedule timezone", () => {
   assert.equal(config.tasks[0].dashboardUrl, "http://homeassistant.local:8123/lovelace/0");
   assert.equal(config.tasks[0].width, 800);
   assert.equal(config.tasks[0].height, 480);
-  assert.equal(config.tasks[0].maximumImageAgeSeconds, 0);
   assert.equal(config.tasks[0].outputPath, path.join(env.OUTPUT_DIRECTORY, "display.png"));
+  assert.equal(config.tasks[0].outputFilename, "display.png");
+  assert.equal(config.tasks[0].timezone, "Asia/Bangkok");
   assert.equal(config.imageScheduleTimezone, "Asia/Bangkok");
   assert.deepEqual(config.tasks[0].imageProcessing, {
     mode: "color", palette: [], dither: "none", threshold: 128, invert: false, rotation: 0,
@@ -103,13 +104,6 @@ test("rejects invalid reusable CSS references and image processing", () => {
   assert.throws(() => loadConfig(environment(configuration({ imageProcessing: { palette: ["#000000"] } }))), /not supported/);
 });
 
-test("validates maximum image age", () => {
-  const valid = loadConfig(environment({ tasks: [{ id: "display", maximumImageAgeSeconds: 900 }], images: [] }));
-  assert.equal(valid.tasks[0].maximumImageAgeSeconds, 900);
-  assert.throws(() => loadConfig(environment({ tasks: [{ id: "display", maximumImageAgeSeconds: -1 }], images: [] })), /maximumImageAgeSeconds/);
-  assert.throws(() => loadConfig(environment({ tasks: [{ id: "display", maximumImageAgeSeconds: 1.5 }], images: [] })), /maximumImageAgeSeconds/);
-});
-
 test("defaults and validates bounded capture retry settings", () => {
   const defaults = loadConfig(environment({ tasks: [{ id: "display" }], images: [] })).tasks[0];
   assert.equal(defaults.retryAttempts, 2);
@@ -143,7 +137,6 @@ test("rejects malformed roots, task values, duplicate ids, and invalid timezone"
   }), /tasks must be an array/);
   assert.throws(() => loadConfig(environment({ tasks: [{ id: "bad id" }], images: [] })), /id/);
   assert.throws(() => loadConfig(environment({ tasks: [{ id: "same" }, { id: "same" }], images: [] })), /Duplicate screenshot task id/);
-  assert.throws(() => loadConfig(environment({ tasks: [{ id: "reserved", outputFilename: "config.json" }], images: [] })), /reserved/);
   settings.imageScheduleTimezone = "Mars/Olympus";
   assert.throws(() => normalizeConfiguration({ settings, tasks: [{ id: "display" }], images: [] }, { outputDirectory: "/data" }), /IANA timezone/);
 });
