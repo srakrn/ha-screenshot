@@ -39,6 +39,8 @@ The published App image is `ghcr.io/srakrn/ha-screenshot:<version>` for `amd64` 
 
 Standalone releases are published to Docker Hub as `srakrn/ha-screenshot` for `amd64` and `arm64`. Publishing a GitHub release with a SemVer tag such as `v1.2.3` creates the `1.2.3`, `1.2`, `1`, and `latest` image tags. Prereleases do not update `latest`, and `0.x` releases do not publish the unstable `0` major alias.
 
+Release versions stay synchronized across `package.json`, `package-lock.json`, and `home-assistant-app/config.yaml`. The matching entry in `home-assistant-app/CHANGELOG.md` documents user-visible behavior; publish the release with the corresponding `v<version>` Git tag.
+
 To show these images on Seeed Studio's ESPHome-based TRMNL 7.5-inch (OG) DIY Kit, including physical page navigation and a compact battery indicator, see the [ESPHome display guide](docs/esphome-trmnl-diy-kit.md).
 
 ### Portainer stack
