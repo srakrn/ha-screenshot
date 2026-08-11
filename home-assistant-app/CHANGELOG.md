@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Queue concurrent Chromium screenshot operations to avoid capture-time CSS latency while keeping dashboard loading and image processing independent.
+
 ## 0.2.0
 
 - Add configurable 2–256-level grayscale output, including standard four-level grayscale.
