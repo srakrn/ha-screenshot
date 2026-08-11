@@ -33,6 +33,38 @@ test("launches Chromium with grayscale text antialiasing", async () => {
   await capture.stop();
 });
 
+test("queues Chromium screenshots without letting failures block the queue", async () => {
+  const capture = new DashboardCapture({ outputDirectory: os.tmpdir() });
+  const calls = [];
+  let finishFirst;
+  const first = capture.queueScreenshot({
+    async screenshot(options) {
+      calls.push(["start", options.id]);
+      await new Promise((resolve) => { finishFirst = resolve; });
+      calls.push(["finish", options.id]);
+      throw new Error("first screenshot failed");
+    },
+  }, { id: "first" });
+  const second = capture.queueScreenshot({
+    async screenshot(options) {
+      calls.push(["start", options.id]);
+      calls.push(["finish", options.id]);
+    },
+  }, { id: "second" });
+
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(calls, [["start", "first"]]);
+  finishFirst();
+  await assert.rejects(first, /first screenshot failed/);
+  await second;
+  assert.deepEqual(calls, [
+    ["start", "first"],
+    ["finish", "first"],
+    ["start", "second"],
+    ["finish", "second"],
+  ]);
+});
+
 test("serializes browser recovery across concurrent failed captures", async () => {
   let launches = 0;
   let firstCloseCalls = 0;

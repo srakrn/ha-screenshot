@@ -72,8 +72,15 @@ export class DashboardCapture {
     this.launch = launch;
     this.restartPromise = null;
     this.stopPromise = null;
+    this.screenshotQueue = Promise.resolve();
     this.stopping = false;
     this.contexts = new Set();
+  }
+
+  queueScreenshot(page, options) {
+    const screenshot = this.screenshotQueue.then(() => page.screenshot(options));
+    this.screenshotQueue = screenshot.catch(() => {});
+    return screenshot;
   }
 
   async start() {
@@ -186,7 +193,7 @@ export class DashboardCapture {
       if (task.format === "jpeg") options.quality = task.jpegQuality;
       try {
         try {
-          await page.screenshot(options);
+          await this.queueScreenshot(page, options);
           await processImage(sourcePath, processedPath, task);
           await fs.rename(processedPath, task.outputPath);
         } catch (error) {
