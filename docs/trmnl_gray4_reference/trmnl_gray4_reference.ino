@@ -148,9 +148,8 @@ static int batteryPercent() {
 
 static void drawBatteryPercentage() {
   const String text = String(batteryPercent()) + "%";
-  epaper.fillRect(740, 0, 60, 22, TFT_GRAY_3);
-  epaper.setTextColor(TFT_GRAY_0, TFT_GRAY_3);
-  epaper.drawRightString(text, 798, 3, 2);
+  epaper.setTextColor(TFT_GRAY_0);
+  epaper.drawRightString(text, DISPLAY_WIDTH - 2, DISPLAY_HEIGHT - 18, 2);
 }
 
 static bool renderPage(size_t index) {

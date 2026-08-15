@@ -13,7 +13,7 @@ It provides:
 - retention of each last successfully downloaded image after a failure;
 - automatic navigation past pages that return HTTP 404;
 - exact four-level quantization into black, dark gray, light gray, and white;
-- a text-only battery percentage overlay;
+- a transparent text-only battery percentage overlay in the lower-right corner;
 - password-protected ArduinoOTA when an OTA password is configured.
 
 It intentionally does not implement ESPHome's native API, entities, fallback
