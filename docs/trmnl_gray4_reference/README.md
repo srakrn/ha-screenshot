@@ -10,6 +10,7 @@ It provides:
 - an immediate download after Wi-Fi connects and polling every five minutes;
 - conditional requests using `ETag` and `Last-Modified`;
 - retention of each last successfully downloaded image after a failure;
+- automatic navigation past pages that return HTTP 404;
 - exact four-level quantization into black, dark gray, light gray, and white;
 - a text-only battery percentage overlay;
 - password-protected ArduinoOTA when an OTA password is configured.

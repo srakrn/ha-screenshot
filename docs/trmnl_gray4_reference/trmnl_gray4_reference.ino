@@ -27,6 +27,7 @@ struct PageImage {
   size_t png_size = 0;
   String etag;
   String last_modified;
+  bool not_found = false;
 };
 
 struct DecodeContext {
@@ -206,9 +207,17 @@ static bool updatePage(size_t index, bool repaint_if_visible) {
 
   const int status = http.GET();
   if (status == HTTP_CODE_NOT_MODIFIED) {
+    page.not_found = false;
     Serial.printf("Page %u unchanged (HTTP 304)\n", static_cast<unsigned>(index));
     http.end();
     return true;
+  }
+  if (status == HTTP_CODE_NOT_FOUND) {
+    page.not_found = true;
+    Serial.printf("Page %u unavailable (HTTP 404); it will be skipped\n",
+                  static_cast<unsigned>(index));
+    http.end();
+    return false;
   }
   if (status != HTTP_CODE_OK) {
     Serial.printf("Page %u request failed: HTTP %d\n", static_cast<unsigned>(index), status);
@@ -249,6 +258,7 @@ static bool updatePage(size_t index, bool repaint_if_visible) {
   page.png_size = static_cast<size_t>(content_length);
   page.etag = new_etag;
   page.last_modified = new_last_modified;
+  page.not_found = false;
   if (previous != nullptr) heap_caps_free(previous);
 
   Serial.printf("Page %u downloaded (%u bytes)\n", static_cast<unsigned>(index),
@@ -257,19 +267,40 @@ static bool updatePage(size_t index, bool repaint_if_visible) {
   return true;
 }
 
+static bool selectAvailablePage(int direction) {
+  const size_t previous_index = page_index;
+  for (size_t offset = 1; offset <= PAGE_COUNT; ++offset) {
+    const size_t candidate = direction > 0
+                                 ? (previous_index + offset) % PAGE_COUNT
+                                 : (previous_index + PAGE_COUNT - (offset % PAGE_COUNT)) % PAGE_COUNT;
+    PageImage &page = pages[candidate];
+    if (page.not_found) continue;
+
+    if (page.png_data == nullptr && WiFi.status() == WL_CONNECTED) {
+      updatePage(candidate, false);
+    }
+    if (page.not_found || page.png_data == nullptr) continue;
+
+    page_index = candidate;
+    if (renderPage(candidate)) return true;
+  }
+
+  page_index = previous_index;
+  Serial.println("No other available page was found");
+  return false;
+}
+
 static void updateAllPages() {
   if (WiFi.status() != WL_CONNECTED) return;
   for (size_t index = 0; index < PAGE_COUNT; ++index) {
     updatePage(index, true);
   }
+  if (pages[page_index].not_found) selectAvailablePage(1);
   last_refresh_ms = millis();
 }
 
 static void selectPage(int direction) {
-  page_index = (page_index + PAGE_COUNT + direction) % PAGE_COUNT;
-  if (!renderPage(page_index) && WiFi.status() == WL_CONNECTED) {
-    updatePage(page_index, true);
-  }
+  selectAvailablePage(direction);
 }
 
 static void pollButton(uint8_t pin, bool &was_down, uint32_t &changed_ms, int direction) {
