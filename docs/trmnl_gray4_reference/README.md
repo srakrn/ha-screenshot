@@ -32,13 +32,14 @@ stops with the required settings in its diagnostic message if it is unavailable.
 
 ## Configure and flash
 
-1. Copy `secrets.example.h` to `secrets.h` in this directory and fill in the
-   Wi-Fi and OTA values. Do not commit `secrets.h`.
-2. Change both `IMAGE_URLS` near the top of `trmnl_gray4_reference.ino`.
-3. Open `trmnl_gray4_reference.ino` in Arduino IDE.
-4. Confirm that `driver.h` is shown as another tab in the same sketch.
-5. Compile and upload over USB.
-6. Open the serial monitor at 115200 baud for download, PNG decode, memory, and
+1. Copy `secrets.example.h` to `secrets.h` in this directory and configure the
+   device name, image URLs, Wi-Fi credentials, and OTA password. Add or remove
+   URL entries to change the number of pages. Do not commit `secrets.h`.
+2. Open `trmnl_gray4_reference.ino` in Arduino IDE.
+3. Confirm that `driver.h` and `secrets.h` are shown as other tabs in the same
+   sketch.
+4. Compile and upload over USB.
+5. Open the serial monitor at 115200 baud for download, PNG decode, memory, and
    refresh diagnostics.
 
 The URLs must return non-interlaced 800 x 480 PNG files with a `Content-Length`

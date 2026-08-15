@@ -8,13 +8,6 @@
 
 #include "secrets.h"
 
-// Edit these two URLs before flashing. /images/<feed-id> URLs work too.
-static const char *const IMAGE_URLS[] = {
-    "http://192.168.1.50:3000/screenshots/overview",
-    "http://192.168.1.50:3000/screenshots/energy",
-};
-
-static constexpr char DEVICE_NAME[] = "trmnl-gray4-reference";
 static constexpr size_t PAGE_COUNT = sizeof(IMAGE_URLS) / sizeof(IMAGE_URLS[0]);
 static constexpr uint16_t DISPLAY_WIDTH = 800;
 static constexpr uint16_t DISPLAY_HEIGHT = 480;
