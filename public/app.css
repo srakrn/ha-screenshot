@@ -6,7 +6,8 @@
 .css-preview { display: block; max-width: 42rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .error-detail { min-width: 24rem; max-width: 60rem; white-space: pre-wrap; overflow-wrap: anywhere; font-size: .75rem; }
 .empty-state { padding: clamp(3rem, 8vw, 6rem) 1.5rem; }
-.empty-state p { max-width: 38rem; }
+.empty-state-compact { padding: 2rem 1rem; }
+.empty-state p { max-width: 38rem; margin-inline: auto; }
 .empty-state-icon { display: inline-grid; place-items: center; width: 3.5rem; height: 3.5rem; margin-bottom: 1.25rem; border-radius: 1rem; background: var(--bs-primary-bg-subtle); color: var(--bs-primary); font-size: 1.75rem; }
 .gallery-grid:empty { --bs-gutter-y: 0; }
 @media (max-width: 767.98px) {

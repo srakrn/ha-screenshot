@@ -26,11 +26,11 @@ if (runtime.runtimeMode === "home_assistant_app") {
 }
 
 if (config.configured) {
-  await activateCapture();
+  if (config.tasks.length > 0) await activateCapture();
   manager.start();
   console.info(`Started ${manager.services.length} capture task(s) and ${config.images.length} scheduled image feed(s)`);
 } else {
-  console.info("Waiting for an initial configuration with at least one capture task");
+  console.info("Waiting for an initial configuration");
 }
 
 let shuttingDown = false;

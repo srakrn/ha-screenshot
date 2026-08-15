@@ -24,9 +24,9 @@
       <div id="error" class="alert alert-danger" hidden></div>
       <section id="gallery-empty" class="empty-state bg-white border rounded-3 shadow-sm text-center" hidden>
         <div class="empty-state-icon" aria-hidden="true">▣</div>
-        <h2 class="h3">Set up your first dashboard image</h2>
-        <p class="text-body-secondary mx-auto mb-4">Connect Home Assistant and add a capture task. Your public image URLs will appear here after the first capture.</p>
-        <a class="btn btn-primary" href="/admin/">Open settings</a>
+        <h2 id="gallery-empty-heading" class="h3">Set up your first dashboard image</h2>
+        <p id="gallery-empty-copy" class="text-body-secondary mx-auto mb-4">Connect Home Assistant and add a capture task. Your public image URLs will appear here after the first capture.</p>
+        <a id="gallery-empty-action" class="btn btn-primary" href="/admin/">Open settings</a>
       </section>
       <div id="gallery-content">
         <section aria-labelledby="images-heading" class="mb-5"><div class="d-flex align-items-baseline gap-3 mb-3"><h2 id="images-heading" class="h4 mb-0">Scheduled image feeds</h2><span id="timezone" class="small text-body-secondary"></span></div><div id="images" class="gallery-grid row g-4"></div><div id="images-empty" class="border rounded bg-white text-center text-body-secondary p-5" hidden>No scheduled image feeds are configured.</div></section>

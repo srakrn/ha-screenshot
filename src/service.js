@@ -390,7 +390,7 @@ function addPublicRoutes(app, manager, config, { now, galleryAuth = (request, re
       const status = service.status(at);
       return { id: image.id, urlIds: image.urlIds, activeTaskId: service.task.id, ready: status.ready, stale: status.stale };
     });
-    const ready = tasks.length > 0 && tasks.every((task) => task.ready);
+    const ready = tasks.every((task) => task.ready);
     const state = ready ? "ok" : tasks.some((task) => task.stale) ? "degraded" : "starting";
     return response.status(ready ? 200 : 503).json({ status: state, tasks, images });
   });

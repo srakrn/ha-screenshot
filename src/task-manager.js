@@ -99,7 +99,7 @@ export class TaskManager {
       `.${path.basename(this.config.configFile)}.${process.pid}.tmp`,
     );
 
-    if (!this.config.configured) await this.activateCapture();
+    if (this.services.length === 0 && normalized.tasks.length > 0) await this.activateCapture();
     await fs.writeFile(temporaryPath, serialized, { encoding: "utf8", mode: 0o600 });
     try {
       await fs.rename(temporaryPath, this.config.configFile);

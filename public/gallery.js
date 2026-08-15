@@ -63,9 +63,15 @@ async function loadGallery() {
     document.querySelector("#timezone").textContent = `Weekly timezone: ${body.timezone}`;
     const all = [...body.images, ...body.tasks];
     const empty = all.length === 0;
+    const setupRequired = Boolean(body.setupRequired);
     document.querySelector("#gallery-empty").hidden = !empty;
     document.querySelector("#gallery-content").hidden = empty;
-    summary.textContent = empty ? "Setup required" : `${all.filter((item) => item.status.ready).length} of ${all.length} images ready`;
+    document.querySelector("#gallery-empty-heading").textContent = setupRequired ? "Set up your first dashboard image" : "No dashboard images configured";
+    document.querySelector("#gallery-empty-copy").textContent = setupRequired
+      ? "Connect Home Assistant and add a capture task. Your public image URLs will appear here after the first capture."
+      : "The service is configured and idle. Add a capture task whenever you want to publish an image.";
+    document.querySelector("#gallery-empty-action").textContent = setupRequired ? "Open settings" : "Open admin";
+    summary.textContent = setupRequired ? "Setup required" : empty ? "No images configured" : `${all.filter((item) => item.status.ready).length} of ${all.length} images ready`;
     updated.textContent = empty ? "" : `Updated ${new Date().toLocaleTimeString()}`;
     document.querySelector("#error").hidden = true;
   } catch (error) {

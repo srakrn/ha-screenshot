@@ -38,6 +38,11 @@ test("loads validated Home Assistant App options and fixed listener paths", (t) 
   assert.equal(config.configured, false);
   assert.equal(config.accessToken, "secret");
   assert.equal(fs.existsSync(runtime.configFile), false);
+
+  fs.writeFileSync(runtime.configFile, JSON.stringify({ customCsses: [], tasks: [], images: [] }));
+  const idleConfig = loadConfig(runtime);
+  assert.equal(idleConfig.configured, true);
+  assert.deepEqual(idleConfig.tasks, []);
 });
 
 test("rejects invalid runtime mode and redacts no option values into errors", (t) => {

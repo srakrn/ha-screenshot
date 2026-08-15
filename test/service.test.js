@@ -319,6 +319,22 @@ test("serves the authenticated gallery and public health metadata", async (t) =>
   assert.doesNotMatch(JSON.stringify({ gallery, health }), /errorLog|admin-only upstream detail/);
 });
 
+test("reports a configured service with no capture tasks as healthy and idle", async (t) => {
+  const manager = {
+    services: [],
+    getService() { return undefined; },
+    getImageByUrlId() { return undefined; },
+  };
+  const config = { configured: true, configUsername: "admin", configPassword: "editor-secret", images: [], imageScheduleTimezone: "UTC" };
+  const server = createApp(manager, config).listen(0, "127.0.0.1");
+  await new Promise((resolve) => server.once("listening", resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+
+  const response = await fetch(`http://127.0.0.1:${server.address().port}/healthz`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { status: "ok", tasks: [], images: [] });
+});
+
 test("protects configuration reads and mutations", async (t) => {
   const { base, replacements, services } = await httpFixture(t);
   services[0].recordCaptureError(new Error("authenticated diagnostic detail"), 2);

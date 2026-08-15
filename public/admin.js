@@ -578,7 +578,6 @@ saveButton.addEventListener("click", async () => {
     };
     const credentialsChanged = Boolean(settings.configPassword)
       || settings.configUsername !== draft.settings.configUsername;
-    if (draft.tasks.length === 0) throw new Error("Add at least one capture task before saving.");
     const tasks = draft.tasks.map(({ status, imageUrl, publicUrl, ...task }) => task);
     const customCsses = draft.customCsses.map((entry) => ({ ...entry }));
     const images = draft.images.map(({ status, urls, activeTaskId, width, height, format, ...image }) => image);

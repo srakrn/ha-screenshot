@@ -102,7 +102,7 @@ test("persists web settings while preserving omitted secrets", async (t) => {
   assert.equal(manager.services[0].task.dashboardUrl, "https://homeassistant.example.test/lovelace/0");
 });
 
-test("rejects first-run settings without a capture task", async (t) => {
+test("saves first-run settings without a capture task and activates capture when one is added", async (t) => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), "ha-screenshot-manager-bootstrap-"));
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   const config = {
@@ -119,11 +119,11 @@ test("rejects first-run settings without a capture task", async (t) => {
     images: [],
   };
   await fs.writeFile(config.configFile, JSON.stringify({ settings: {}, customCsses: [], tasks: [], images: [] }));
-  let activated = false;
+  let activations = 0;
   const manager = new TaskManager({ async capture() { return { capturedAt: new Date() }; } }, config, silentLogger, {
-    activateCapture: async () => { activated = true; },
+    activateCapture: async () => { activations += 1; },
   });
-  await assert.rejects(manager.replace({
+  await manager.replace({
     settings: {
       haUrl: "http://homeassistant.local:8123",
       accessToken: "secret",
@@ -133,12 +133,19 @@ test("rejects first-run settings without a capture task", async (t) => {
     },
     tasks: [],
     images: [],
-  }), /At least one screenshot task/);
+  });
   assert.deepEqual(manager.services, []);
-  assert.equal(config.configured, false);
-  assert.equal(activated, false);
-  const saved = JSON.parse(await fs.readFile(config.configFile, "utf8"));
+  assert.equal(config.configured, true);
+  assert.equal(activations, 0);
+  let saved = JSON.parse(await fs.readFile(config.configFile, "utf8"));
   assert.deepEqual(saved.tasks, []);
+
+  await manager.replace({ tasks: [{ id: "display", refreshIntervalSeconds: 0 }], images: [] });
+  await manager.stop();
+  assert.equal(activations, 1);
+  assert.deepEqual(manager.services.map((service) => service.task.id), ["display"]);
+  saved = JSON.parse(await fs.readFile(config.configFile, "utf8"));
+  assert.deepEqual(saved.tasks.map((task) => task.id), ["display"]);
 });
 
 test("activates an App first-run task without persisting Supervisor options", async (t) => {

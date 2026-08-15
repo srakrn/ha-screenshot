@@ -70,7 +70,7 @@ Web settings, deployment environment variables, and screenshot task fields are t
 
 Do not commit a real `.env`, `tasks.json`, Home Assistant token, captured dashboard, or user-provided `custom.css` file.
 
-At least one explicitly configured task is required after first-run bootstrap. Do not add an implicit capture-task fallback. Scheduled image feeds define their own explicit fallback task.
+Zero explicitly configured tasks is a valid idle state after first-run bootstrap. Do not add an implicit capture-task fallback. Scheduled image feeds define their own explicit fallback task.
 
 Store the atomic configuration at `OUTPUT_DIRECTORY/config.json`; in Docker this is `/data/config.json` on the persistent data volume. Keep the configuration private because it contains the Home Assistant token and editor password.
 

@@ -17,7 +17,7 @@ A Chromium service that periodically captures Home Assistant dashboards and serv
    docker compose up -d --build
    ```
 
-4. Open `/admin/`, enter the Home Assistant connection and editor credentials in **Settings**, add at least one capture task, then save. The first-run editor is open only until this initial configuration is saved.
+4. Open `/admin/`, enter the Home Assistant connection and editor credentials in **Settings**, optionally add capture tasks, then save. The first-run editor is open only until this initial configuration is saved.
 5. Open `/` and sign in with the same editor credentials to view the gallery.
 
 The canonical public routes are:
@@ -33,7 +33,7 @@ Both routes require caches to revalidate on every request and support `ETag`, `L
 
 Home Assistant OS and other Supervisor-managed installations can add this Git repository as a custom App repository, install **Home Assistant Screenshot**, and configure its Long-Lived Access Token from the App configuration page. The administration UI is available only through authenticated Supervisor ingress. Port 3000 remains a direct, unauthenticated LAN listener for display clients.
 
-App mode keeps Supervisor options in `/data/options.json`, its task/feed document in `/data/config.json`, and captures in `/data/images/`. The token is read into memory from Supervisor options and is not copied into the task document. At least one explicit task must be saved through the ingress editor before Chromium starts.
+App mode keeps Supervisor options in `/data/options.json`, its task/feed document in `/data/config.json`, and captures in `/data/images/`. The token is read into memory from Supervisor options and is not copied into the task document. An empty task list is valid, and Chromium starts only when a capture task is configured.
 
 The published App image is `ghcr.io/srakrn/ha-screenshot:<version>` for `amd64` and `aarch64`. Home Assistant Container installations do not include Supervisor and should use the Docker/Compose quick start above. See [the App documentation](home-assistant-app/DOCS.md) for setup and security details.
 
@@ -128,7 +128,7 @@ The complete configuration is saved atomically and hot-applied by the web editor
 }
 ```
 
-If `OUTPUT_DIRECTORY/config.json` does not exist at standalone startup, the service creates a private empty bootstrap configuration. The gallery shows a focused setup prompt and the editor remains unauthenticated until the first valid configuration is saved. That first save requires complete service settings and at least one explicit task. Changes are fully validated before the file or running configuration is replaced. Schedule-only changes preserve running capture services and their current status.
+If `OUTPUT_DIRECTORY/config.json` does not exist at standalone startup, the service creates a private empty bootstrap configuration. The gallery shows a focused setup prompt and the editor remains unauthenticated until the first valid configuration is saved. That first save requires complete service settings but may contain zero capture tasks. A configured service with no tasks is healthy and idle; Chromium starts when the first task is added. Changes are fully validated before the file or running configuration is replaced. Schedule-only changes preserve running capture services and their current status.
 
 ### Scheduled image feeds
 

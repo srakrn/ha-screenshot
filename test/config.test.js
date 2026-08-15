@@ -70,8 +70,11 @@ test("loads task defaults and global schedule timezone", () => {
   });
 });
 
-test("rejects a configured service without capture tasks", () => {
-  assert.throws(() => loadConfig(environment({ tasks: [], images: [] })), /At least one screenshot task/);
+test("loads a configured service without capture tasks", () => {
+  const config = loadConfig(environment({ tasks: [], images: [] }));
+  assert.equal(config.configured, true);
+  assert.deepEqual(config.tasks, []);
+  assert.deepEqual(config.images, []);
 });
 
 test("normalizes reusable custom CSS and ordered task references", () => {

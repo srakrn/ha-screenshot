@@ -347,7 +347,6 @@ export function normalizeConfiguration(definition, shared, { settings: managedSe
   const settings = normalizeSettings(managedSettings ?? definition.settings);
   const customCsses = normalizeCustomCsses(definition.customCsses ?? []);
   const tasks = normalizeTasks(definition.tasks, { ...shared, ...settings }, customCsses);
-  if (tasks.length === 0) throw new Error("At least one screenshot task is required");
   const images = normalizeImages(definition.images ?? [], tasks);
   return { ...settings, customCsses, tasks, images };
 }
@@ -401,7 +400,8 @@ export function loadConfig(runtimeOrEnv = process.env) {
   })();
   fs.mkdirSync(runtime.outputDirectory, { recursive: true });
   const definition = loadDefinition(runtime.configFile, { createBootstrap: runtime.runtimeMode === "standalone" });
-  const isEmptyBootstrap = definition === null || (Array.isArray(definition?.tasks) && definition.tasks.length === 0
+  const isEmptyBootstrap = definition === null || (runtime.runtimeMode === "standalone"
+    && Array.isArray(definition?.tasks) && definition.tasks.length === 0
     && Array.isArray(definition.images) && definition.images.length === 0
     && (!definition.settings || Object.keys(definition.settings).length === 0));
   const managedSettings = runtime.settingsManagedExternally ? {

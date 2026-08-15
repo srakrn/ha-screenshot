@@ -59,3 +59,13 @@ test("admin editor exposes ordered movable image URL controls", async () => {
   assert.match(javascript, /function readImageUrlIds/);
   assert.match(javascript, /urlIds: other\.urlIds\.filter/);
 });
+
+test("admin editor presents a compact, saveable zero-task state", async () => {
+  const html = await fs.readFile(path.join(repositoryRoot, "public/index.html"), "utf8");
+  const css = await fs.readFile(path.join(repositoryRoot, "public/app.css"), "utf8");
+  const javascript = await fs.readFile(path.join(repositoryRoot, "public/admin.js"), "utf8");
+  assert.match(html, /id="tasks-empty" class="empty-state empty-state-compact/);
+  assert.match(css, /\.empty-state-compact \{ padding: 2rem 1rem; \}/);
+  assert.match(css, /\.empty-state p \{[^}]*margin-inline: auto;/);
+  assert.doesNotMatch(javascript, /at least one capture task before saving/i);
+});
