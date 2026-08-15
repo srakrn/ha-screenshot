@@ -36,7 +36,7 @@ A scheduled feed can replace either URL. Change that image's `url` to `${screens
 
 ## 2. Copy the complete device YAML
 
-Download or copy [the complete ESPHome device file](esphome-trmnl-diy-kit.yaml). It requires ESPHome 2026.7.0 or newer and uses the current `image` platform syntax.
+Download or copy [the example ESPHome device file](esphome-trmnl-diy-kit.example.yaml) to `esphome-trmnl-diy-kit.yaml`. It requires ESPHome 2026.7.0 or newer and uses the current `image` platform syntax.
 
 Only these substitutions normally need editing:
 

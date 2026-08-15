@@ -1,8 +1,15 @@
 node_modules/
 .env
+.env.*
+!.env.example
 data/
 custom.css
 tasks.json
 config/
 npm-debug.log*
-docs/trmnl_gray4_reference/secrets.h
+
+# Local device credentials and ESPHome configuration.
+**/secrets.h
+**/secrets.yaml
+**/secrets.yml
+docs/esphome-trmnl-diy-kit.yaml
