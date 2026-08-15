@@ -144,11 +144,12 @@ async function httpFixture(t) {
   await fs.writeFile(fallbackTask.outputPath, fallbackBytes);
   const services = [new CaptureService({}, morningTask, silentLogger), new CaptureService({}, fallbackTask, silentLogger)];
   const replacements = [];
-  const image = { id: "display", fallbackTaskId: "fallback", slots: [{ days: ["mon"], start: "06:00", end: "09:00", taskId: "morning" }] };
+  const image = { id: "display-feed", urlIds: ["display", "display-alt"], fallbackTaskId: "fallback", slots: [{ days: ["mon"], start: "06:00", end: "09:00", taskId: "morning" }] };
   const manager = {
     services,
     getService(id) { return services.find((service) => service.task.id === id); },
     getImage(id) { return id === image.id ? image : undefined; },
+    getImageByUrlId(id) { return image.urlIds.includes(id) ? image : undefined; },
     resolveImage() { return services[0]; },
     configuration() { return { settings: { haUrl: "http://homeassistant.local:8123", accessToken: "secret", imageScheduleTimezone: "UTC", configUsername: "admin", configPassword: "editor-secret" }, tasks: services.map((service) => service.task), images: [image] }; },
     async replace(value) { replacements.push(value); return value; },
@@ -168,6 +169,9 @@ test("serves direct and scheduled images without legacy aliases", async (t) => {
   assert.deepEqual(Buffer.from(await direct.arrayBuffer()), morningBytes);
   const scheduled = await fetch(`${base}/images/display`);
   assert.equal(scheduled.status, 200); assert.deepEqual(Buffer.from(await scheduled.arrayBuffer()), morningBytes);
+  const alternate = await fetch(`${base}/images/display-alt`);
+  assert.equal(alternate.status, 200); assert.deepEqual(Buffer.from(await alternate.arrayBuffer()), morningBytes);
+  assert.equal((await fetch(`${base}/images/display-feed`)).status, 404);
   assert.equal((await fetch(`${base}/screenshots/morning.png`)).status, 404);
   assert.equal((await fetch(`${base}/snapshot`)).status, 404);
   assert.equal((await fetch(`${base}/api/screenshots`)).status, 404);
@@ -207,7 +211,7 @@ test("changes validators after replacement and when a feed switches tasks", asyn
   const switchedManager = {
     services,
     getService(id) { return services.find((service) => service.task.id === id); },
-    getImage() { return { id: "display" }; },
+    getImageByUrlId() { return { id: "display", urlIds: ["display"] }; },
     resolveImage() { return services[1]; },
   };
   const app = createApp(switchedManager, { configured: true, configUsername: "admin", configPassword: "editor-secret", images: [], imageScheduleTimezone: "UTC" });
@@ -247,7 +251,7 @@ test("serves stale last-good images while health reports degraded", async (t) =>
   const manager = {
     services: [service],
     getService(id) { return id === staleTask.id ? service : undefined; },
-    getImage() { return undefined; },
+    getImageByUrlId() { return undefined; },
   };
   const now = () => new Date("2026-08-03T00:01:01Z");
   const server = createApp(manager, { configured: true, configUsername: "admin", configPassword: "editor-secret", images: [], imageScheduleTimezone: "UTC" }, { now }).listen(0, "127.0.0.1");
@@ -273,7 +277,7 @@ test("serves JPEG metadata and rejects a wrong-sized persisted image", async (t)
   const jpegBytes = await sharp({ create: { width: 800, height: 480, channels: 3, background: "white" } }).jpeg().toBuffer();
   await fs.writeFile(jpegTask.outputPath, jpegBytes);
   const service = new CaptureService({}, jpegTask, silentLogger);
-  const manager = { services: [service], getService() { return service; }, getImage() { return undefined; } };
+  const manager = { services: [service], getService() { return service; }, getImageByUrlId() { return undefined; } };
   const server = createApp(manager, { configured: true, configUsername: "admin", configPassword: "editor-secret", images: [], imageScheduleTimezone: "UTC" }).listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   t.after(() => new Promise((resolve) => server.close(resolve)));
@@ -308,8 +312,10 @@ test("serves the authenticated gallery and public health metadata", async (t) =>
   assert.match(await javascript.text(), /Bootstrap v5\.3\.8/);
   const galleryResponse = await fetch(`${base}/api/gallery`); const gallery = await galleryResponse.json();
   assert.equal(galleryResponse.status, 200); assert.equal(gallery.images[0].activeTaskId, "morning"); assert.equal(gallery.tasks[0].imageUrl, "/screenshots/morning");
+  assert.deepEqual(gallery.images[0].imageUrls, ["/images/display", "/images/display-alt"]);
   const healthResponse = await fetch(`${base}/healthz`); const health = await healthResponse.json();
   assert.equal(healthResponse.status, 200); assert.equal(health.images[0].activeTaskId, "morning");
+  assert.deepEqual(health.images[0].urlIds, ["display", "display-alt"]);
   assert.doesNotMatch(JSON.stringify({ gallery, health }), /errorLog|admin-only upstream detail/);
 });
 
@@ -327,6 +333,8 @@ test("protects configuration reads and mutations", async (t) => {
   assert.equal("configPassword" in configBody.settings, false);
   assert.equal(configBody.tasks[0].status.errorLog[0].attempt, 2);
   assert.match(configBody.tasks[0].status.errorLog[0].message, /authenticated diagnostic detail/);
+  assert.deepEqual(configBody.images[0].urlIds, ["display", "display-alt"]);
+  assert.deepEqual(configBody.images[0].urls.map(({ id }) => id), ["display", "display-alt"]);
   assert.equal((await fetch(`${base}/api/config`, { method: "PUT", headers: { authorization, "content-type": "application/json" }, body: JSON.stringify({ tasks: [], images: [] }) })).status, 403);
   const update = await fetch(`${base}/api/config`, {
     method: "PUT",

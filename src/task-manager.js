@@ -41,6 +41,10 @@ export class TaskManager {
     return this.config.images.find((image) => image.id === id);
   }
 
+  getImageByUrlId(urlId) {
+    return this.config.images.find((image) => image.urlIds.includes(urlId));
+  }
+
   resolveImage(image, now = new Date()) {
     return this.getService(resolveImageTaskId(image, this.config.imageScheduleTimezone, now));
   }

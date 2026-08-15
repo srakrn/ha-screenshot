@@ -181,9 +181,18 @@ function renderImages() {
     const fallback = draft.tasks.find((task) => task.id === item.fallbackTaskId);
     const active = draft.tasks.find((task) => task.id === item.activeTaskId) || fallback;
     const row = document.createElement("tr");
-    row.insertCell().append(preview(item.imageUrl || `/images/${item.id}`, item.status?.imageAvailable, `${item.id} scheduled image`));
+    const urls = item.urlIds.map((id) => item.urls?.find((url) => url.id === id) || ({ id, imageUrl: `/images/${id}`, publicUrl: `/images/${id}` }));
+    const firstUrl = urls[0];
+    const previewUrl = item.urls?.[0]?.imageUrl || firstUrl?.imageUrl;
+    row.insertCell().append(preview(previewUrl, Boolean(previewUrl && item.status?.imageAvailable), `${item.id} scheduled image`));
     const name = row.insertCell(); const strong = document.createElement("strong"); strong.textContent = item.id;
-    name.append(strong, document.createElement("br"), link(publicImageUrl(item, `/images/${item.id}`)));
+    name.append(strong);
+    for (const url of urls) {
+      name.append(document.createElement("br"), link(publicImageUrl(url, `/images/${url.id}`)));
+    }
+    if (!urls.length) {
+      const warning = document.createElement("div"); warning.className = "small text-danger"; warning.textContent = "Needs a public URL"; name.append(warning);
+    }
     const activeCell = row.insertCell(); activeCell.textContent = item.activeTaskId || item.fallbackTaskId; activeCell.append(document.createTextNode(" "), badge(item.status));
     row.insertCell().textContent = item.fallbackTaskId;
     const schedule = row.insertCell(); schedule.textContent = `${slotSummary(item)} · ${active?.width || fallback?.width}×${active?.height || fallback?.height} ${active?.format?.toUpperCase() || ""}`;
@@ -320,10 +329,35 @@ function openImageEditor(item, index) {
   taskOptions(imageForm.elements.fallbackTaskId, item.fallbackTaskId);
   document.querySelector("#image-timezone").value = timezone;
   document.querySelector("#image-error").hidden = true;
+  document.querySelector("#image-urls").replaceChildren();
+  item.urlIds.forEach(addImageUrl);
+  updateImageUrlsEmpty();
   document.querySelector("#slots").replaceChildren();
   item.slots.forEach(addSlot);
   updateSlotsEmpty();
   imageModal.show();
+}
+
+function addImageUrl(urlId = "") {
+  const row = document.querySelector("#image-url-template").content.firstElementChild.cloneNode(true);
+  row.querySelector('[name="urlId"]').value = urlId;
+  row.querySelector(".remove-image-url").addEventListener("click", () => { row.remove(); updateImageUrlsEmpty(); });
+  row.querySelector(".move-url-up").addEventListener("click", () => {
+    if (row.previousElementSibling) row.parentElement.insertBefore(row, row.previousElementSibling);
+  });
+  row.querySelector(".move-url-down").addEventListener("click", () => {
+    if (row.nextElementSibling) row.parentElement.insertBefore(row.nextElementSibling, row);
+  });
+  document.querySelector("#image-urls").append(row);
+  updateImageUrlsEmpty();
+}
+
+function updateImageUrlsEmpty() {
+  document.querySelector("#image-urls-empty").hidden = document.querySelector("#image-urls").children.length !== 0;
+}
+
+function readImageUrlIds() {
+  return [...document.querySelectorAll('#image-urls [name="urlId"]')].map((input) => input.value.trim());
 }
 
 function readSlots() {
@@ -339,6 +373,8 @@ function minute(value) { const [hour, part] = value.split(":").map(Number); retu
 function validateImage(image) {
   if (!imageForm.reportValidity()) throw new Error("Correct the highlighted image fields.");
   if (draft.images.some((other, index) => index !== editingImage && other.id === image.id)) throw new Error(`Image ID ${image.id} already exists.`);
+  if (!image.urlIds.length) throw new Error("Add at least one public URL.");
+  if (new Set(image.urlIds).size !== image.urlIds.length) throw new Error("Public URLs must be unique within the feed.");
   const fallback = draft.tasks.find((task) => task.id === image.fallbackTaskId);
   const segments = [];
   image.slots.forEach((slot, slotIndex) => {
@@ -424,8 +460,10 @@ document.querySelector("#add-css").addEventListener("click", () => {
 document.querySelector("#add-image").addEventListener("click", () => {
   if (!draft.tasks.length) return showNotice("Add a capture task before creating an image URL.");
   const id = uniqueId("new-image", new Set(draft.images.map((image) => image.id)));
-  openImageEditor({ id, fallbackTaskId: draft.tasks[0].id, slots: [] }, -1);
+  const urlId = uniqueId("display", new Set(draft.images.flatMap((image) => image.urlIds)));
+  openImageEditor({ id, urlIds: [urlId], fallbackTaskId: draft.tasks[0].id, slots: [] }, -1);
 });
+document.querySelector("#add-image-url").addEventListener("click", () => addImageUrl());
 document.querySelector("#add-slot").addEventListener("click", () => addSlot());
 
 taskForm.addEventListener("submit", (event) => {
@@ -482,8 +520,12 @@ cssForm.addEventListener("submit", (event) => {
 imageForm.addEventListener("submit", (event) => {
   event.preventDefault();
   try {
-    const image = { id: imageForm.elements.id.value.trim(), fallbackTaskId: imageForm.elements.fallbackTaskId.value, slots: readSlots() };
+    const image = { id: imageForm.elements.id.value.trim(), urlIds: readImageUrlIds(), fallbackTaskId: imageForm.elements.fallbackTaskId.value, slots: readSlots() };
     validateImage(image);
+    draft.images = draft.images.map((other, index) => index === editingImage ? other : ({
+      ...other,
+      urlIds: other.urlIds.filter((urlId) => !image.urlIds.includes(urlId)),
+    }));
     if (editingImage < 0) draft.images.push(image); else draft.images[editingImage] = { ...draft.images[editingImage], ...image };
     markDirty(); render(); imageModal.hide();
   } catch (error) { showFormError(document.querySelector("#image-error"), error.message); }
@@ -539,7 +581,7 @@ saveButton.addEventListener("click", async () => {
     if (draft.tasks.length === 0) throw new Error("Add at least one capture task before saving.");
     const tasks = draft.tasks.map(({ status, imageUrl, publicUrl, ...task }) => task);
     const customCsses = draft.customCsses.map((entry) => ({ ...entry }));
-    const images = draft.images.map(({ status, imageUrl, publicUrl, activeTaskId, width, height, format, ...image }) => image);
+    const images = draft.images.map(({ status, urls, activeTaskId, width, height, format, ...image }) => image);
     const response = await fetch(adminUrl("api/config"), { method: "PUT", headers: { "Content-Type": "application/json", "X-Requested-With": "ha-screenshot" }, body: JSON.stringify({ settings, customCsses, tasks, images }) });
     const body = await response.json(); if (!response.ok) throw new Error(body.error || "Configuration could not be saved");
     applyConfiguration(body);

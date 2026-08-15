@@ -64,6 +64,7 @@
   "images": [
     {
       "id": "hallway-display",
+      "urlIds": ["hallway-left", "hallway-center", "hallway-right"],
       "fallbackTaskId": "overview",
       "slots": [
         {

@@ -343,8 +343,11 @@ function adminConfiguration(manager, config, now, { previewPrefix = "", publicBa
       const service = manager.resolveImage(image, at);
       return {
         ...image,
-        imageUrl: `${previewPrefix}/images/${image.id}`,
-        publicUrl: `${publicBaseUrl}/images/${image.id}`,
+        urls: image.urlIds.map((urlId) => ({
+          id: urlId,
+          imageUrl: `${previewPrefix}/images/${urlId}`,
+          publicUrl: `${publicBaseUrl}/images/${urlId}`,
+        })),
         activeTaskId: service.task.id,
         width: service.task.width,
         height: service.task.height,
@@ -370,10 +373,10 @@ function addPublicRoutes(app, manager, config, { now, galleryAuth = (request, re
     return sendImage(service, request, response, now());
   });
 
-  app.get("/images/:imageId", (request, response) => {
+  app.get("/images/:urlId", (request, response) => {
     if (!config.configured) return response.status(503).json({ error: "Configuration required" });
-    const image = manager.getImage(request.params.imageId);
-    if (!image) return response.status(404).json({ error: "Scheduled image not found" });
+    const image = manager.getImageByUrlId(request.params.urlId);
+    if (!image) return response.status(404).json({ error: "Scheduled image URL not found" });
     const at = now();
     return sendImage(manager.resolveImage(image, at), request, response, at);
   });
@@ -385,7 +388,7 @@ function addPublicRoutes(app, manager, config, { now, galleryAuth = (request, re
     const images = config.images.map((image) => {
       const service = manager.resolveImage(image, at);
       const status = service.status(at);
-      return { id: image.id, activeTaskId: service.task.id, ready: status.ready, stale: status.stale };
+      return { id: image.id, urlIds: image.urlIds, activeTaskId: service.task.id, ready: status.ready, stale: status.stale };
     });
     const ready = tasks.length > 0 && tasks.every((task) => task.ready);
     const state = ready ? "ok" : tasks.some((task) => task.stale) ? "degraded" : "starting";
@@ -403,10 +406,12 @@ function addPublicRoutes(app, manager, config, { now, galleryAuth = (request, re
         const service = manager.resolveImage(image, at);
         return {
           id: image.id,
+          urlIds: image.urlIds,
           width: service.task.width,
           height: service.task.height,
           format: service.task.format,
-          imageUrl: `/images/${image.id}`,
+          imageUrl: `/images/${image.urlIds[0]}`,
+          imageUrls: image.urlIds.map((urlId) => `/images/${urlId}`),
           activeTaskId: service.task.id,
           status: service.status(at),
         };
@@ -435,9 +440,9 @@ function addAdminRoutes(app, manager, config, {
     if (!service) return response.status(404).json({ error: "Screenshot task not found" });
     return sendImage(service, request, response, now());
   });
-  app.get(`${previewPrefix}/images/:imageId`, auth, (request, response) => {
-    const image = manager.getImage(request.params.imageId);
-    if (!image) return response.status(404).json({ error: "Scheduled image not found" });
+  app.get(`${previewPrefix}/images/:urlId`, auth, (request, response) => {
+    const image = manager.getImageByUrlId(request.params.urlId);
+    if (!image) return response.status(404).json({ error: "Scheduled image URL not found" });
     const at = now();
     return sendImage(manager.resolveImage(image, at), request, response, at);
   });

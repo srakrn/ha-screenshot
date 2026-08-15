@@ -22,12 +22,13 @@ test("persists and applies replacement task schedules atomically", async (t) => 
   const config = await fixture(t);
   const captures = [];
   const manager = new TaskManager({ async capture(task) { captures.push(task.id); return { capturedAt: new Date() }; } }, config, silentLogger);
-  await manager.replace({ tasks: [{ id: "one", width: 640, height: 384, refreshIntervalSeconds: 0 }, { id: "two", width: 640, height: 384, refreshIntervalSeconds: 0 }], images: [{ id: "feed", fallbackTaskId: "one", slots: [] }] });
+  await manager.replace({ tasks: [{ id: "one", width: 640, height: 384, refreshIntervalSeconds: 0 }, { id: "two", width: 640, height: 384, refreshIntervalSeconds: 0 }], images: [{ id: "feed", urlIds: ["left", "right"], fallbackTaskId: "one", slots: [] }] });
   await manager.stop();
   assert.deepEqual(manager.services.map((service) => service.task.id), ["one", "two"]);
   assert.deepEqual(captures.sort(), ["one", "two"]);
   const saved = JSON.parse(await fs.readFile(config.configFile, "utf8"));
   assert.equal(saved.images[0].id, "feed");
+  assert.deepEqual(saved.images[0].urlIds, ["left", "right"]);
   assert.deepEqual(saved.tasks.map(({ id, width }) => ({ id, width })), [{ id: "one", width: 640 }, { id: "two", width: 640 }]);
 });
 
@@ -36,10 +37,27 @@ test("schedule-only updates preserve capture services and do not restart capture
   let captures = 0;
   const manager = new TaskManager({ async capture() { captures += 1; return { capturedAt: new Date() }; } }, config, silentLogger);
   const originalService = manager.services[0];
-  await manager.replace({ tasks: manager.definitions(), images: [{ id: "feed", fallbackTaskId: "old", slots: [] }] });
+  await manager.replace({ tasks: manager.definitions(), images: [{ id: "feed", urlIds: ["display"], fallbackTaskId: "old", slots: [] }] });
   assert.equal(manager.services[0], originalService);
   assert.equal(captures, 0);
   assert.equal(manager.getImage("feed").fallbackTaskId, "old");
+  assert.equal(manager.getImageByUrlId("display").id, "feed");
+});
+
+test("moves a stable URL between feeds and changes its selected task", async (t) => {
+  const config = await fixture(t);
+  const manager = new TaskManager({ async capture() { return { capturedAt: new Date() }; } }, config, silentLogger);
+  const tasks = [
+    { ...manager.definitions()[0], id: "one" },
+    { ...manager.definitions()[0], id: "two" },
+  ];
+  await manager.replace({ tasks, images: [{ id: "first", urlIds: ["stable"], fallbackTaskId: "one", slots: [] }] });
+  assert.equal(manager.getImageByUrlId("stable").id, "first");
+  assert.equal(manager.resolveImage(manager.getImageByUrlId("stable")).task.id, "one");
+  await manager.replace({ tasks, images: [{ id: "second", urlIds: ["stable"], fallbackTaskId: "two", slots: [] }] });
+  assert.equal(manager.getImageByUrlId("stable").id, "second");
+  assert.equal(manager.resolveImage(manager.getImageByUrlId("stable")).task.id, "two");
+  await manager.stop();
 });
 
 test("persists reusable CSS and restarts tasks that consume changed CSS", async (t) => {
@@ -163,7 +181,7 @@ test("failed validation neither persists nor replaces the running configuration"
   const config = await fixture(t);
   const manager = new TaskManager({}, config, silentLogger);
   const before = await fs.readFile(config.configFile, "utf8");
-  await assert.rejects(manager.replace({ tasks: [{ id: "new" }], images: [{ id: "feed", fallbackTaskId: "missing", slots: [] }] }), /fallbackTaskId/);
+  await assert.rejects(manager.replace({ tasks: [{ id: "new" }], images: [{ id: "feed", urlIds: ["display"], fallbackTaskId: "missing", slots: [] }] }), /fallbackTaskId/);
   assert.equal(await fs.readFile(config.configFile, "utf8"), before);
   assert.equal(manager.services[0].task.id, "old");
 });

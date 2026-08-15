@@ -44,8 +44,12 @@ function card(item, scheduled) {
   details.append(detail("Resolution", `${item.width} × ${item.height}`), detail("Format", item.format.toUpperCase()));
   if (scheduled) details.append(detail("Active task", item.activeTaskId));
   else details.append(detail("Refresh", intervalLabel(item.refreshIntervalSeconds)));
-  const url = document.createElement("a"); url.href = item.imageUrl; url.target = "_blank"; url.rel = "noreferrer"; url.className = "font-monospace small text-decoration-none url-text d-block"; url.textContent = item.imageUrl;
-  body.append(heading, details, url); article.append(target, body); column.append(article); return column;
+  const urls = scheduled ? item.imageUrls : [item.imageUrl];
+  const links = document.createElement("div");
+  for (const imageUrl of urls) {
+    const url = document.createElement("a"); url.href = imageUrl; url.target = "_blank"; url.rel = "noreferrer"; url.className = "font-monospace small text-decoration-none url-text d-block"; url.textContent = imageUrl; links.append(url);
+  }
+  body.append(heading, details, links); article.append(target, body); column.append(article); return column;
 }
 
 async function loadGallery() {

@@ -299,6 +299,7 @@ export function normalizeImages(definitions = [], tasks) {
   if (!Array.isArray(definitions)) throw new Error("images must be an array");
   const taskById = new Map(tasks.map((task) => [task.id, task]));
   const ids = new Set();
+  const urlIds = new Set();
   return definitions.map((definition, imageIndex) => {
     const label = `images[${imageIndex}]`;
     if (!definition || typeof definition !== "object" || Array.isArray(definition)) throw new Error(`${label} must be an object`);
@@ -306,12 +307,24 @@ export function normalizeImages(definitions = [], tasks) {
     if (typeof id !== "string" || !/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error(`${label}.id must contain only letters, numbers, underscores, and hyphens`);
     if (ids.has(id)) throw new Error(`Duplicate image id: ${id}`);
     ids.add(id);
+    if (!Array.isArray(definition.urlIds) || definition.urlIds.length === 0) {
+      throw new Error(`${label}.urlIds must be a non-empty array`);
+    }
+    const imageUrlIds = definition.urlIds.map((urlId, urlIndex) => {
+      if (typeof urlId !== "string" || !/^[a-zA-Z0-9_-]+$/.test(urlId)) {
+        throw new Error(`${label}.urlIds[${urlIndex}] must contain only letters, numbers, underscores, and hyphens`);
+      }
+      if (urlIds.has(urlId)) throw new Error(`Duplicate image URL id: ${urlId}`);
+      urlIds.add(urlId);
+      return urlId;
+    });
     if (typeof definition.fallbackTaskId !== "string" || !taskById.has(definition.fallbackTaskId)) {
       throw new Error(`${label}.fallbackTaskId must reference an existing task`);
     }
     if (definition.slots !== undefined && !Array.isArray(definition.slots)) throw new Error(`${label}.slots must be an array`);
     const image = {
       id,
+      urlIds: imageUrlIds,
       fallbackTaskId: definition.fallbackTaskId,
       slots: (definition.slots || []).map((slot, slotIndex) => normalizedSlot(slot, imageIndex, slotIndex, taskById)),
     };
@@ -356,7 +369,7 @@ export function taskToDefinition(task) {
 }
 
 export function imageToDefinition(image) {
-  return { id: image.id, fallbackTaskId: image.fallbackTaskId, slots: image.slots.map((slot) => ({ ...slot, days: [...slot.days] })) };
+  return { id: image.id, urlIds: [...image.urlIds], fallbackTaskId: image.fallbackTaskId, slots: image.slots.map((slot) => ({ ...slot, days: [...slot.days] })) };
 }
 
 export function configurationToDefinition(configuration, { includeSettings = true } = {}) {

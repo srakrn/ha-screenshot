@@ -132,9 +132,9 @@ test("defaults and validates bounded capture retry settings", () => {
 test("normalizes scheduled images and overnight ranges", () => {
   const config = loadConfig(environment({
     tasks: [{ id: "day", width: 800, height: 480 }, { id: "night", width: 800, height: 480 }],
-    images: [{ id: "display", fallbackTaskId: "day", slots: [{ days: ["FRI", "sat"], start: "22:00", end: "05:00", taskId: "night" }] }],
+    images: [{ id: "display", urlIds: ["panel-a", "panel-b"], fallbackTaskId: "day", slots: [{ days: ["FRI", "sat"], start: "22:00", end: "05:00", taskId: "night" }] }],
   }));
-  assert.deepEqual(config.images[0], { id: "display", fallbackTaskId: "day", slots: [{ days: ["fri", "sat"], start: "22:00", end: "05:00", taskId: "night" }] });
+  assert.deepEqual(config.images[0], { id: "display", urlIds: ["panel-a", "panel-b"], fallbackTaskId: "day", slots: [{ days: ["fri", "sat"], start: "22:00", end: "05:00", taskId: "night" }] });
 });
 
 test("rejects malformed roots, task values, duplicate ids, and invalid timezone", () => {
@@ -169,10 +169,24 @@ test("rejects incomplete connection and editor settings", () => {
 test("rejects invalid feed references, time ranges, overlaps, and incompatible tasks", () => {
   const tasks = [{ id: "a", width: 800, height: 480 }, { id: "b", width: 800, height: 480 }, { id: "large", width: 1200, height: 825 }];
   const config = (images) => ({ tasks, images });
-  assert.throws(() => loadConfig(environment(config([{ id: "feed", fallbackTaskId: "missing", slots: [] }]))), /fallbackTaskId/);
-  assert.throws(() => loadConfig(environment(config([{ id: "feed", fallbackTaskId: "a", slots: [{ days: [], start: "08:00", end: "09:00", taskId: "b" }] }]))), /days/);
-  assert.throws(() => loadConfig(environment(config([{ id: "feed", fallbackTaskId: "a", slots: [{ days: ["mon"], start: "8:00", end: "09:00", taskId: "b" }] }]))), /HH:MM/);
-  assert.throws(() => loadConfig(environment(config([{ id: "feed", fallbackTaskId: "a", slots: [{ days: ["mon"], start: "08:00", end: "08:00", taskId: "b" }] }]))), /non-zero/);
-  assert.throws(() => loadConfig(environment(config([{ id: "feed", fallbackTaskId: "a", slots: [{ days: ["sun"], start: "23:00", end: "02:00", taskId: "b" }, { days: ["mon"], start: "01:00", end: "03:00", taskId: "a" }] }]))), /overlapping/);
-  assert.throws(() => loadConfig(environment(config([{ id: "feed", fallbackTaskId: "a", slots: [{ days: ["mon"], start: "08:00", end: "09:00", taskId: "large" }] }]))), /dimensions and format/);
+  const feed = (overrides = {}) => ({ id: "feed", urlIds: ["display"], fallbackTaskId: "a", slots: [], ...overrides });
+  assert.throws(() => loadConfig(environment(config([feed({ fallbackTaskId: "missing" })]))), /fallbackTaskId/);
+  assert.throws(() => loadConfig(environment(config([feed({ slots: [{ days: [], start: "08:00", end: "09:00", taskId: "b" }] })]))), /days/);
+  assert.throws(() => loadConfig(environment(config([feed({ slots: [{ days: ["mon"], start: "8:00", end: "09:00", taskId: "b" }] })]))), /HH:MM/);
+  assert.throws(() => loadConfig(environment(config([feed({ slots: [{ days: ["mon"], start: "08:00", end: "08:00", taskId: "b" }] })]))), /non-zero/);
+  assert.throws(() => loadConfig(environment(config([feed({ slots: [{ days: ["sun"], start: "23:00", end: "02:00", taskId: "b" }, { days: ["mon"], start: "01:00", end: "03:00", taskId: "a" }] })]))), /overlapping/);
+  assert.throws(() => loadConfig(environment(config([feed({ slots: [{ days: ["mon"], start: "08:00", end: "09:00", taskId: "large" }] })]))), /dimensions and format/);
+});
+
+test("requires globally unique URL IDs for scheduled images", () => {
+  const tasks = [{ id: "a" }];
+  const config = (images) => ({ tasks, images });
+  assert.throws(() => loadConfig(environment(config([{ id: "feed", fallbackTaskId: "a", slots: [] }]))), /urlIds.*non-empty array/);
+  assert.throws(() => loadConfig(environment(config([{ id: "feed", urlIds: [], fallbackTaskId: "a", slots: [] }]))), /urlIds.*non-empty array/);
+  assert.throws(() => loadConfig(environment(config([{ id: "feed", urlIds: ["bad path"], fallbackTaskId: "a", slots: [] }]))), /urlIds\[0\]/);
+  assert.throws(() => loadConfig(environment(config([{ id: "feed", urlIds: ["same", "same"], fallbackTaskId: "a", slots: [] }]))), /Duplicate image URL id/);
+  assert.throws(() => loadConfig(environment(config([
+    { id: "one", urlIds: ["same"], fallbackTaskId: "a", slots: [] },
+    { id: "two", urlIds: ["same"], fallbackTaskId: "a", slots: [] },
+  ]))), /Duplicate image URL id/);
 });

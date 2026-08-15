@@ -1,6 +1,6 @@
 # Home Assistant dashboard image service
 
-A Chromium service that periodically captures Home Assistant dashboards and serves them as unauthenticated images for eInk displays and other polling clients. The same image runs as a normal Docker container or as a Supervisor-managed Home Assistant App. Capture tasks are independent from scheduled image feeds, so one stable URL can show different dashboard captures throughout the week without creating Chromium work on request.
+A Chromium service that periodically captures Home Assistant dashboards and serves them as unauthenticated images for eInk displays and other polling clients. The same image runs as a normal Docker container or as a Supervisor-managed Home Assistant App. Capture tasks are independent from scheduled image feeds, so one or more stable URLs can show different dashboard captures throughout the week without creating Chromium work on request.
 
 ## Quick start
 
@@ -24,7 +24,7 @@ The canonical public routes are:
 
 ```text
 /screenshots/overview       latest image from one capture task
-/images/hallway-display     stable scheduled image feed
+/images/hallway-left        one URL owned by a scheduled image feed
 ```
 
 Both routes require caches to revalidate on every request and support `ETag`, `Last-Modified`, conditional `GET`, and `HEAD`. An unchanged conditional request returns HTTP 304 without transferring the image again. They return HTTP 503 until the selected task has produced its first successful image. Scheduled image requests only select an existing capture file; they never trigger Chromium.
@@ -113,6 +113,7 @@ The complete configuration is saved atomically and hot-applied by the web editor
   "images": [
     {
       "id": "kitchen",
+      "urlIds": ["kitchen-left", "kitchen-center", "kitchen-right"],
       "fallbackTaskId": "morning",
       "slots": [
         {
@@ -131,7 +132,11 @@ If `OUTPUT_DIRECTORY/config.json` does not exist at standalone startup, the serv
 
 ### Scheduled image feeds
 
-Every feed has a URL-safe `id`, a `fallbackTaskId`, and zero or more weekly override slots. A slot contains:
+Every feed has a URL-safe editor `id`, one or more URL-safe `urlIds`, a `fallbackTaskId`, and zero or more weekly override slots. The feed ID identifies the grouped schedule in the editor and APIs; only its URL IDs create public paths such as `/images/kitchen-left`.
+
+All URL IDs are globally unique. Every URL owned by a feed returns the same currently selected task. URL ownership can be moved between feeds in one editor save, allowing fixed device URLs to show the same image today and different images later without reflashing the device.
+
+A slot contains:
 
 - `days`: one or more of `sun`, `mon`, `tue`, `wed`, `thu`, `fri`, and `sat`;
 - `start` and `end`: strict 24-hour `HH:MM` local times;
@@ -188,9 +193,9 @@ All other service settings are managed through `/admin/`. The service itself lis
 
 ## HTTP API and health
 
-- `GET /api/gallery` returns only public task/feed metadata and current feed selections.
-- `GET /healthz` returns unified task/feed status. It returns HTTP 503 with `starting` while an image is missing or `degraded` when any configured age limit is exceeded.
-- `GET` and `HEAD` on `/screenshots/:taskId` and `/images/:imageId` return strong `ETag`, `Last-Modified`, `Content-Length`, stale-state headers, and mandatory-revalidation cache policy. Conditional `GET` returns HTTP 304 when the selected image is unchanged.
+- `GET /api/gallery` returns only public task/feed metadata, grouped feed URLs, and current feed selections.
+- `GET /healthz` returns unified task/feed status, including each feed's URL IDs. It returns HTTP 503 with `starting` while an image is missing or `degraded` when any configured age limit is exceeded.
+- `GET` and `HEAD` on `/screenshots/:taskId` and `/images/:urlId` return strong `ETag`, `Last-Modified`, `Content-Length`, stale-state headers, and mandatory-revalidation cache policy. Conditional `GET` returns HTTP 304 when the selected image is unchanged.
 - `GET /api/config` and `PUT /api/config` require editor authentication. The mutation also requires `X-Requested-With: ha-screenshot`.
 - `POST /api/tasks/:id/capture` requires the same authentication and mutation header.
 

@@ -48,3 +48,14 @@ test("gallery and admin pages use consistent explicit navigation", async () => {
   assert.match(gallery, /href="\/" aria-current="page">Gallery<\/a>/);
   assert.match(admin, /href="\.\/" aria-current="page">Admin<\/a>/);
 });
+
+test("admin editor exposes ordered movable image URL controls", async () => {
+  const html = await fs.readFile(path.join(repositoryRoot, "public/index.html"), "utf8");
+  const javascript = await fs.readFile(path.join(repositoryRoot, "public/admin.js"), "utf8");
+  assert.match(html, /id="image-url-template"/);
+  assert.match(html, /name="urlId"/);
+  assert.match(html, /move-url-up/);
+  assert.match(html, /move-url-down/);
+  assert.match(javascript, /function readImageUrlIds/);
+  assert.match(javascript, /urlIds: other\.urlIds\.filter/);
+});
