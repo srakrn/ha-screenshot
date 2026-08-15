@@ -41,7 +41,7 @@ Standalone releases are published to Docker Hub as `srakrn/ha-screenshot` for `a
 
 Release versions stay synchronized across `package.json`, `package-lock.json`, and `home-assistant-app/config.yaml`. The matching entry in `home-assistant-app/CHANGELOG.md` documents user-visible behavior; publish the release with the corresponding `v<version>` Git tag.
 
-To show these images on Seeed Studio's ESPHome-based TRMNL 7.5-inch (OG) DIY Kit, including physical page navigation and a compact battery indicator, see the [ESPHome display guide](docs/esphome-trmnl-diy-kit.md).
+To show these images on Seeed Studio's ESPHome-based TRMNL 7.5-inch (OG) DIY Kit, use the [complete ESPHome YAML](docs/esphome-trmnl-diy-kit.yaml) and its [setup guide](docs/esphome-trmnl-diy-kit.md). The example includes Wi-Fi, API, OTA, online images, physical page navigation, battery sensing, and the display driver.
 
 ### Portainer stack
 
