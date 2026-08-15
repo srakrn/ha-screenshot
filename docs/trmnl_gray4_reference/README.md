@@ -25,8 +25,10 @@ Install these libraries in Arduino IDE:
 - [Seeed_GFX](https://github.com/Seeed-Studio/Seeed_GFX)
 - [PNGdec](https://github.com/bitbank2/PNGdec)
 
-Use the **XIAO ESP32S3** board and enable **OPI PSRAM**. The sketch checks for
-PSRAM at boot and stops if it is unavailable.
+Use the **XIAO ESP32S3 Plus** board (`XIAO_ESP32S3_PLUS`) and select
+**Tools > PSRAM > OPI PSRAM**. The ordinary XIAO ESP32S3 board target is not the
+correct target for the TRMNL DIY Kit. The sketch checks for PSRAM at boot and
+stops with the required settings in its diagnostic message if it is unavailable.
 
 ## Configure and flash
 

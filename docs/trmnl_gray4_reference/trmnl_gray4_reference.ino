@@ -321,7 +321,9 @@ void setup() {
   analogSetPinAttenuation(BATTERY_ADC_PIN, ADC_11db);
 
   if (!psramFound()) {
-    Serial.println("Fatal: OPI PSRAM was not detected");
+    Serial.println("Fatal: OPI PSRAM was not detected. In Arduino IDE select");
+    Serial.println("Tools > Board > XIAO ESP32S3 Plus, then Tools > PSRAM > OPI PSRAM,");
+    Serial.println("recompile, and upload again.");
     while (true) delay(1000);
   }
   Serial.printf("PSRAM available: %u bytes\n", static_cast<unsigned>(ESP.getFreePsram()));
