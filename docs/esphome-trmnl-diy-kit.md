@@ -2,6 +2,10 @@
 
 This is a complete, copy-pasteable ESPHome configuration for Seeed Studio's TRMNL 7.5-inch (OG) DIY Kit. It displays two 800 x 480 images from this service, switches pages with KEY1 and KEY2, and overlays a compact battery indicator. The ESP32 stores no Home Assistant token or editor password.
 
+For experimental native four-level grayscale, see the
+[Arduino reference sketch](trmnl_gray4_reference/README.md). ESPHome's built-in
+Waveshare driver renders this panel in black and white only.
+
 The GPIO assignments and display driver are specific to this kit. Do not flash this file unchanged onto another e-paper board.
 
 ## 1. Create the screenshot tasks
