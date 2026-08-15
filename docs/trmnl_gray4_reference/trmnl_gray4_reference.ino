@@ -207,6 +207,9 @@ static bool updatePage(size_t index, bool repaint_if_visible, bool force_downloa
     if (!page.last_modified.isEmpty()) {
       http.addHeader("If-Modified-Since", page.last_modified);
     }
+  } else {
+    http.addHeader("Cache-Control", "no-cache, no-store, max-age=0");
+    http.addHeader("Pragma", "no-cache");
   }
 
   const int status = http.GET();
@@ -309,18 +312,23 @@ static void selectPage(int direction) {
 
 static void forceRefreshPage() {
   const size_t requested_index = page_index;
-  Serial.printf("Force-refreshing page %u\n", static_cast<unsigned>(requested_index));
+  Serial.printf("Re-fetching page %u from %s\n", static_cast<unsigned>(requested_index),
+                pages[requested_index].url);
 
-  if (WiFi.status() == WL_CONNECTED) {
-    updatePage(requested_index, false, true);
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Cannot re-fetch the current page while Wi-Fi is disconnected");
+    return;
   }
+  const bool downloaded = updatePage(requested_index, false, true);
   if (pages[requested_index].not_found) {
     selectAvailablePage(1);
     return;
   }
-  if (!renderPage(requested_index)) {
-    Serial.println("Current page has no cached image to refresh");
+  if (!downloaded) {
+    Serial.println("Current page re-fetch failed; leaving the display unchanged");
+    return;
   }
+  renderPage(requested_index);
 }
 
 static void pollButton(uint8_t pin, bool &was_down, uint32_t &changed_ms, int direction) {
