@@ -1,5 +1,5 @@
 name: Home Assistant Screenshot
-version: "0.2.1"
+version: "0.3.0"
 slug: ha_screenshot
 description: Periodically render Home Assistant dashboards and expose stable image URLs.
 url: https://github.com/srakrn/ha-screenshot
