@@ -6,15 +6,16 @@ consume the normal PNG endpoints from `ha-screenshot`.
 
 It provides:
 
-- any number of cached pages, with KEY1 moving forward and KEY2 moving backward;
-- an immediate cache-bypassing re-fetch and repaint of the current page with KEY3;
-- an immediate download after Wi-Fi connects and polling every five minutes;
+- deep sleep between updates, with a five-minute timer wake;
+- any number of pages, with KEY1 waking and moving forward and KEY2 waking and moving backward;
+- a KEY3 wake that immediately cache-bypasses, re-fetches, and repaints the current page;
+- Wi-Fi shutdown after each short fetch cycle;
 - conditional requests using `ETag` and `Last-Modified`;
-- retention of each last successfully downloaded image after a failure;
+- retention of the last successfully displayed e-paper image after a failure;
 - automatic navigation past pages that return HTTP 404;
 - exact four-level quantization into black, dark gray, light gray, and white;
 - a transparent text-only battery percentage overlay in the lower-right corner;
-- password-protected ArduinoOTA when an OTA password is configured.
+- battery-divider power only while a measurement is being taken.
 
 It intentionally does not implement ESPHome's native API, entities, fallback
 portal, or encrypted OTA protocol. Serial logging is the primary diagnostic
@@ -43,6 +44,16 @@ stops with the required settings in its diagnostic message if it is unavailable.
 4. Compile and upload over USB.
 5. Open the serial monitor at 115200 baud for download, PNG decode, memory, and
    refresh diagnostics.
+
+Firmware updates are USB-only; the sketch does not include ArduinoOTA.
+
+Deep sleep resets the processor and discards PSRAM, while the e-paper panel keeps
+showing its last image without power. The current page and its HTTP validators
+are retained in RTC memory. A timer wake can therefore accept HTTP 304 and go
+straight back to sleep without refreshing the panel. A page-button wake must
+download the newly selected page before displaying it, so page changes are not
+instantaneous. If a request, decode, or refresh fails, the panel keeps showing
+its previous successful image and the sketch retries after the next wake.
 
 The URLs must return non-interlaced 800 x 480 PNG files with a `Content-Length`
 header. The service's screenshot and scheduled-feed endpoints satisfy this
