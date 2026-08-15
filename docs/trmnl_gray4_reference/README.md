@@ -6,7 +6,8 @@ consume the normal PNG endpoints from `ha-screenshot`.
 
 It provides:
 
-- two cached pages selected by KEY1 and KEY2;
+- any number of cached pages, with KEY1 moving forward and KEY2 moving backward;
+- an immediate forced download and repaint of the current page with KEY3;
 - an immediate download after Wi-Fi connects and polling every five minutes;
 - conditional requests using `ETag` and `Last-Modified`;
 - retention of each last successfully downloaded image after a failure;

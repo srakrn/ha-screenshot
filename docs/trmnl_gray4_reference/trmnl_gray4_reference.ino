@@ -18,6 +18,7 @@ static constexpr size_t MAX_PNG_BYTES = 1024UL * 1024UL;
 
 static constexpr uint8_t NEXT_BUTTON_PIN = 2;
 static constexpr uint8_t PREVIOUS_BUTTON_PIN = 3;
+static constexpr uint8_t REFRESH_BUTTON_PIN = 5;
 static constexpr uint8_t BATTERY_ENABLE_PIN = 6;
 static constexpr uint8_t BATTERY_ADC_PIN = 1;
 
@@ -46,8 +47,10 @@ bool ota_started = false;
 
 bool next_button_was_down = false;
 bool previous_button_was_down = false;
+bool refresh_button_was_down = false;
 uint32_t next_button_changed_ms = 0;
 uint32_t previous_button_changed_ms = 0;
+uint32_t refresh_button_changed_ms = 0;
 
 static uint8_t clampGrayLevel(uint8_t luminance) {
   // The service's four-level PNG contains 0, 85, 170, and 255. Rounding
@@ -186,7 +189,7 @@ static bool readResponseBody(HTTPClient &http, uint8_t *destination, size_t size
   return offset == size;
 }
 
-static bool updatePage(size_t index, bool repaint_if_visible) {
+static bool updatePage(size_t index, bool repaint_if_visible, bool force_download) {
   PageImage &page = pages[index];
   HTTPClient http;
   WiFiClient client;
@@ -200,9 +203,11 @@ static bool updatePage(size_t index, bool repaint_if_visible) {
     Serial.printf("Could not start request for page %u\n", static_cast<unsigned>(index));
     return false;
   }
-  if (!page.etag.isEmpty()) http.addHeader("If-None-Match", page.etag);
-  if (!page.last_modified.isEmpty()) {
-    http.addHeader("If-Modified-Since", page.last_modified);
+  if (!force_download) {
+    if (!page.etag.isEmpty()) http.addHeader("If-None-Match", page.etag);
+    if (!page.last_modified.isEmpty()) {
+      http.addHeader("If-Modified-Since", page.last_modified);
+    }
   }
 
   const int status = http.GET();
@@ -277,7 +282,7 @@ static bool selectAvailablePage(int direction) {
     if (page.not_found) continue;
 
     if (page.png_data == nullptr && WiFi.status() == WL_CONNECTED) {
-      updatePage(candidate, false);
+      updatePage(candidate, false, false);
     }
     if (page.not_found || page.png_data == nullptr) continue;
 
@@ -293,7 +298,7 @@ static bool selectAvailablePage(int direction) {
 static void updateAllPages() {
   if (WiFi.status() != WL_CONNECTED) return;
   for (size_t index = 0; index < PAGE_COUNT; ++index) {
-    updatePage(index, true);
+    updatePage(index, true, false);
   }
   if (pages[page_index].not_found) selectAvailablePage(1);
   last_refresh_ms = millis();
@@ -303,12 +308,37 @@ static void selectPage(int direction) {
   selectAvailablePage(direction);
 }
 
+static void forceRefreshPage() {
+  const size_t requested_index = page_index;
+  Serial.printf("Force-refreshing page %u\n", static_cast<unsigned>(requested_index));
+
+  if (WiFi.status() == WL_CONNECTED) {
+    updatePage(requested_index, false, true);
+  }
+  if (pages[requested_index].not_found) {
+    selectAvailablePage(1);
+    return;
+  }
+  if (!renderPage(requested_index)) {
+    Serial.println("Current page has no cached image to refresh");
+  }
+}
+
 static void pollButton(uint8_t pin, bool &was_down, uint32_t &changed_ms, int direction) {
   const bool is_down = digitalRead(pin) == LOW;
   if (is_down != was_down && millis() - changed_ms >= 20) {
     changed_ms = millis();
     was_down = is_down;
     if (is_down) selectPage(direction);
+  }
+}
+
+static void pollRefreshButton() {
+  const bool is_down = digitalRead(REFRESH_BUTTON_PIN) == LOW;
+  if (is_down != refresh_button_was_down && millis() - refresh_button_changed_ms >= 20) {
+    refresh_button_changed_ms = millis();
+    refresh_button_was_down = is_down;
+    if (is_down) forceRefreshPage();
   }
 }
 
@@ -340,6 +370,7 @@ void setup() {
 
   pinMode(NEXT_BUTTON_PIN, INPUT_PULLUP);
   pinMode(PREVIOUS_BUTTON_PIN, INPUT_PULLUP);
+  pinMode(REFRESH_BUTTON_PIN, INPUT_PULLUP);
   pinMode(BATTERY_ENABLE_PIN, OUTPUT);
   digitalWrite(BATTERY_ENABLE_PIN, HIGH);
   analogSetPinAttenuation(BATTERY_ADC_PIN, ADC_11db);
@@ -393,5 +424,6 @@ void loop() {
   pollButton(NEXT_BUTTON_PIN, next_button_was_down, next_button_changed_ms, 1);
   pollButton(PREVIOUS_BUTTON_PIN, previous_button_was_down,
              previous_button_changed_ms, -1);
+  pollRefreshButton();
   delay(5);
 }
